@@ -10,6 +10,7 @@ import { DubbingPreset, DubbingItem, SceneItem } from './types';
 import { DEFAULT_SCENES } from './data/defaultScenes';
 import { audioEngine } from './utils/audioEngine';
 import { DialogueLanguage } from './shared/language';
+import { IndexedDbStore, RecordStore } from './storage/recordStore';
 import {
   Sparkles,
   Film,
@@ -72,6 +73,11 @@ const DEFAULT_PRESETS: DubbingPreset[] = [
       '피할 수 없는 악마의 속삭임처럼 요리사의 귓가에 맴도는 유혹과 파멸의 계시',
   },
 ];
+
+/** 저장할 때는 audioUrl을 빼고 base64만 둔다(같은 음성을 두 번 저장하지 않게). */
+type StoredClip = Omit<DubbingItem, 'audioUrl'>;
+
+const clipStore: RecordStore<StoredClip> = new IndexedDbStore<StoredClip>('clips');
 
 export default function App() {
   const { script, isLoading: isScriptLoading, reload: reloadScript } = useScript();
@@ -157,6 +163,27 @@ export default function App() {
   // Current active scene object
   const currentScene =
     scenes.find((s) => s.id === activeSceneId) || scenes[0] || DEFAULT_SCENES[0];
+
+  // 예전에 만든 클립을 모두 불러온다. 개수 제한 없이 최신순.
+  useEffect(() => {
+    clipStore
+      .list()
+      .then((stored) => {
+        const restored = stored.map((c) => ({ ...c, audioUrl: `data:${c.mimeType};base64,${c.audioBase64}` }));
+        setHistory((prev) => {
+          const ids = new Set(prev.map((c) => c.id));
+          return [...prev, ...restored.filter((c) => !ids.has(c.id))].sort((a, b) => b.createdAt - a.createdAt);
+        });
+      })
+      .catch((e) => console.warn('저장된 클립을 불러오지 못했습니다', e));
+  }, []);
+
+  const keepClip = (clip: DubbingItem) => {
+    setCurrentClip(clip);
+    setHistory((prev) => [clip, ...prev]);
+    const { audioUrl: _url, ...stored } = clip;
+    clipStore.put(stored).catch((e) => setErrorMsg(`클립 저장 실패: ${e?.message ?? e}`));
+  };
 
   // Initialize hidden audio element
   useEffect(() => {
@@ -291,8 +318,7 @@ export default function App() {
         createdAt: Date.now(),
       };
 
-      setCurrentClip(newClip);
-      setHistory((prev) => [newClip, ...prev.slice(0, 9)]);
+      keepClip(newClip);
 
       if (audioRef.current) {
         audioRef.current.src = audioUrl;
@@ -359,8 +385,7 @@ export default function App() {
         createdAt: Date.now(),
       };
 
-      setCurrentClip(newClip);
-      setHistory((prev) => [newClip, ...prev.slice(0, 9)]);
+      keepClip(newClip);
 
       if (audioRef.current) {
         audioRef.current.src = audioUrl;
@@ -438,7 +463,7 @@ export default function App() {
             </div>
             <div>
               <h1 className="text-sm font-bold tracking-tight text-white flex items-center gap-2">
-                <span>토끼 가면 더빙 스튜디오</span>
+                <span>PLATING 더빙 스튜디오</span>
                 <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-400 font-normal">
                   Gemini 3.8 TTS
                 </span>
@@ -578,7 +603,7 @@ export default function App() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-xs font-semibold text-neutral-300">
                 <History className="w-4 h-4 text-neutral-400" />
-                <span>최근 생성 클립 ({history.length})</span>
+                <span>생성 클립 ({history.length})</span>
               </div>
             </div>
 
@@ -587,7 +612,7 @@ export default function App() {
                 생성된 더빙 음원이 여기에 보관됩니다.
               </p>
             ) : (
-              <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+              <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
                 {history.map((clip) => {
                   const isCurrent = currentClip?.id === clip.id;
                   return (
@@ -601,13 +626,18 @@ export default function App() {
                       }`}
                     >
                       <div className="truncate mr-2">
-                        <div className="font-semibold truncate">{clip.presetName}</div>
+                        <div className="font-semibold truncate">
+                          {clip.scriptLineId && <span className="font-mono text-neutral-400 mr-1.5">{clip.scriptLineId}</span>}
+                          {clip.presetName}
+                        </div>
+                        <div className="text-[10px] text-neutral-500 truncate">{clip.text}</div>
                         <div className="text-[10px] text-neutral-500 font-mono truncate">
                           {clip.voiceName} •{' '}
-                          {new Date(clip.createdAt).toLocaleTimeString([], {
+                          {new Date(clip.createdAt).toLocaleString([], {
+                            month: '2-digit',
+                            day: '2-digit',
                             hour: '2-digit',
                             minute: '2-digit',
-                            second: '2-digit',
                           })}
                         </div>
                       </div>
@@ -629,7 +659,7 @@ export default function App() {
 
       {/* Footer */}
       <footer className="border-t border-neutral-900 py-4 text-center text-xs text-neutral-600">
-        토끼 가면 더빙 스튜디오 • Powered by Gemini 3.8 Flash TTS & Stop-Motion Cinema Engine
+        PLATING 더빙 스튜디오 • Powered by Gemini 3.8 Flash TTS & Stop-Motion Cinema Engine
       </footer>
 
       {/* Custom Studio Modal */}

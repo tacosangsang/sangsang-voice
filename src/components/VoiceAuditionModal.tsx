@@ -8,7 +8,7 @@ import { X, Play, Square, Loader2, Check, Copy, Mic2 } from 'lucide-react';
 import { PLATING_SCRIPT, SPEAKERS, SpeakerId, lineText } from '../data/platingScript';
 import { DialogueLanguage, LANGUAGES } from '../shared/language';
 import { GENDER_LABEL, SPEAKER_AUDITIONS, voiceOwner } from '../data/voiceCandidates';
-import { IndexedDbTakeStore, TakeStore } from '../storage/takeStore';
+import { IndexedDbStore, RecordStore } from '../storage/recordStore';
 
 interface VoiceAuditionModalProps {
   isOpen: boolean;
@@ -16,7 +16,14 @@ interface VoiceAuditionModalProps {
 }
 
 const CHOICE_KEY = 'plating-voice-audition-choices';
-const takeStore: TakeStore = new IndexedDbTakeStore();
+/** 생성 조건을 이은 키(화자|목소리|대본 줄|지시문|언어)와 data URL */
+interface StoredTake {
+  key: string;
+  url: string;
+  createdAt: number;
+}
+
+const takeStore: RecordStore<StoredTake> = new IndexedDbStore<StoredTake>('takes');
 
 /** 확정한 목소리와 그때의 지시문. 지시문을 고쳐 들어 보고 골랐다면 그 지시문까지가 선택이다. */
 interface Choice {

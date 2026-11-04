@@ -27,8 +27,8 @@ PLATING(10분 AI 애니메이션)의 대사 녹음본을 Gemini TTS로 만드는
 - 재생 속도는 내보내기에 들어가지 않는다. 브라우저 재생은 음높이를 유지하지만 Web Audio playbackRate는 음높이가 바뀌기 때문. 넣으려면 타임 스트레치(예: SoundTouch 계열)가 필요하다.
 - "효과 포함 WAV"는 잔향 꼬리 2.5초가 붙어 컷 길이보다 길다. 컷 길이 비교는 원본 기준이다.
 - 화자별 기본 목소리·연기 지시문이 정해지지 않았다. 지금 프리셋 4개는 토끼용 시안이다.
-- 기본 씬 5개(`src/data/defaultScenes.ts`)는 PLATING 설정이 아니다(붉은 눈, 은쟁반, 심판관).
-- 생성 기록은 메모리에만 있어 새로고침하면 사라진다. 씬 이미지는 localStorage(용량 약 5MB)에 base64로 저장된다.
+- 기본 씬(`src/data/defaultScenes.ts`)은 대사 있는 8개 씬이고 그림이 아직 없다.
+- 생성 클립과 목소리 비교 테이크는 이 브라우저의 IndexedDB(`src/storage/recordStore.ts`)에 개수 제한 없이 남는다. 다른 기기와는 공유되지 않는다. 커스텀 씬 이미지는 localStorage(용량 약 5MB)에 base64로 저장된다.
 - 사용 모델 이름(`gemini-3.8-flash-tts` 등)과 응답 오디오 형식은 실제 키로 확인하지 않았다. `sourceMimeType`이 응답에 함께 오니 첫 실행 때 확인한다.
 
 ## 확인
