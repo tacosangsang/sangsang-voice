@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { X, Sparkles, Mic, Volume2, Wand2, Plus } from 'lucide-react';
-import { PLATING_SCRIPT, SPEAKERS, findScriptLine, lineText } from '../data/platingScript';
+import { X, Sparkles, Mic, Volume2, Wand2, Plus, RefreshCw } from 'lucide-react';
+import { findScriptLine, lineText } from '../data/platingScript';
+import { ScriptSnapshot } from '../script/source';
 import { DialogueLanguage, LANGUAGES, DEFAULT_LANGUAGE } from '../shared/language';
 
 interface CustomStudioModalProps {
@@ -15,6 +16,9 @@ interface CustomStudioModalProps {
     scriptLineId?: string;
     language: DialogueLanguage;
   }) => Promise<void>;
+  script: ScriptSnapshot;
+  isScriptLoading: boolean;
+  onReloadScript: () => void;
 }
 
 export const CustomStudioModal: React.FC<CustomStudioModalProps> = ({
@@ -22,6 +26,9 @@ export const CustomStudioModal: React.FC<CustomStudioModalProps> = ({
   onClose,
   isLoading,
   onGenerate,
+  script,
+  isScriptLoading,
+  onReloadScript,
 }) => {
   const [text, setText] = useState('신은 두 접시 중 하나만 고릅니다. <breath> 다른 하나가 초라하면 더 쉽겠지요.');
   const [voiceName, setVoiceName] = useState('Charon');
@@ -33,14 +40,17 @@ export const CustomStudioModal: React.FC<CustomStudioModalProps> = ({
   const [language, setLanguage] = useState<DialogueLanguage>(DEFAULT_LANGUAGE);
   // 언어별 입력을 따로 보관해 전환해도 손으로 고친 문장이 지워지지 않게 한다.
   const [drafts, setDrafts] = useState<Partial<Record<DialogueLanguage, string>>>({});
-  const scriptLine = findScriptLine(scriptLineId);
+  // 줄마다 노션 "연기 지시" 칸을 불러와 고칠 수 있게 하고, 생성 때 지시문 뒤에 붙인다.
+  const [lineDirection, setLineDirection] = useState('');
+  const scriptLine = findScriptLine(script.lines, scriptLineId);
 
   if (!isOpen) return null;
 
   const handlePickLine = (id: string) => {
     setScriptLineId(id);
     setDrafts({});
-    const line = findScriptLine(id);
+    const line = findScriptLine(script.lines, id);
+    setLineDirection(line?.direction ?? '');
     if (line) setText(lineText(line, language) ?? '');
   };
 
@@ -90,7 +100,7 @@ export const CustomStudioModal: React.FC<CustomStudioModalProps> = ({
     await onGenerate({
       text: text.trim(),
       voiceName,
-      stylePrompt,
+      stylePrompt: lineDirection.trim() ? `${stylePrompt.trim()} ${lineDirection.trim()}` : stylePrompt,
       presetName: scriptLine ? `${scriptLine.cut} ${voiceName}` : `커스텀 더빙 (${voiceName})`,
       scriptLineId: scriptLine && text.trim() ? scriptLine.id : undefined,
       language,
@@ -149,9 +159,27 @@ export const CustomStudioModal: React.FC<CustomStudioModalProps> = ({
 
           {/* PLATING 대본 줄 선택 */}
           <div className="space-y-2">
-            <label htmlFor="plating-line" className="text-xs font-semibold text-neutral-300">
-              PLATING 대본에서 불러오기
-            </label>
+            <div className="flex items-center justify-between">
+              <label htmlFor="plating-line" className="text-xs font-semibold text-neutral-300">
+                PLATING 대본에서 불러오기
+              </label>
+              <button
+                type="button"
+                onClick={onReloadScript}
+                disabled={isScriptLoading}
+                className="flex items-center gap-1 text-[11px] text-neutral-400 hover:text-neutral-200 disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3 h-3 ${isScriptLoading ? 'animate-spin' : ''}`} />
+                {script.origin === 'notion' ? '노션' : '저장소 사본'} · 다시 읽기
+              </button>
+            </div>
+            {script.warnings.length > 0 && (
+              <ul className="text-[11px] text-amber-400 space-y-0.5">
+                {script.warnings.map((w) => (
+                  <li key={w}>{w}</li>
+                ))}
+              </ul>
+            )}
             <select
               id="plating-line"
               value={scriptLineId}
@@ -159,9 +187,9 @@ export const CustomStudioModal: React.FC<CustomStudioModalProps> = ({
               className="w-full rounded-xl bg-neutral-950 border border-neutral-800 p-2.5 text-xs text-neutral-200 focus:outline-none focus:border-red-500/80"
             >
               <option value="">직접 입력 (대본 줄 없음)</option>
-              {SPEAKERS.map((sp) => (
+              {script.speakers.map((sp) => (
                 <optgroup key={sp.id} label={sp.name}>
-                  {PLATING_SCRIPT.filter((l) => l.speaker === sp.id).map((l) => (
+                  {script.lines.filter((l) => l.speaker === sp.id).map((l) => (
                     <option key={l.id} value={l.id}>
                       {l.cut} ({l.cutSeconds}s) {l.text.slice(0, 28)}
                     </option>
@@ -173,6 +201,20 @@ export const CustomStudioModal: React.FC<CustomStudioModalProps> = ({
               <p className="text-[11px] text-neutral-500 leading-relaxed">
                 {scriptLine.tc} · 컷 {scriptLine.cutSeconds}s · {scriptLine.situation}
               </p>
+            )}
+            {scriptLine && (
+              <div className="space-y-1">
+                <label htmlFor="line-direction" className="text-[11px] font-semibold text-neutral-400">
+                  이 줄 연기 지시 (노션 "연기 지시" 칸, 지시문 뒤에 붙음)
+                </label>
+                <textarea
+                  id="line-direction"
+                  value={lineDirection}
+                  onChange={(e) => setLineDirection(e.target.value)}
+                  rows={2}
+                  className="w-full rounded-xl bg-neutral-950 border border-neutral-800 p-2.5 text-xs text-neutral-200 focus:outline-none focus:border-red-500/80"
+                />
+              </div>
             )}
             {missingTranslation && (
               <p className="text-[11px] text-amber-400">

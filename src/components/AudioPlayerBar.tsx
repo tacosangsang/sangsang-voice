@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { Play, Pause, RotateCcw, Download, Sliders, Volume2, Sparkles, Mic, Layers } from 'lucide-react';
 import { DubbingItem } from '../types';
-import { checkFit, findScriptLine } from '../data/platingScript';
+import { ScriptLine, checkFit, findScriptLine } from '../data/platingScript';
 import { effectsFromSettings, renderWithEffects } from '../audio/offlineRender';
 
 interface AudioPlayerBarProps {
   currentClip: DubbingItem | null;
+  /** 컷 길이 비교에 쓰는 지금 대본 */
+  scriptLines: ScriptLine[];
   isPlaying: boolean;
   currentTime: number;
   duration: number;
@@ -24,6 +26,7 @@ interface AudioPlayerBarProps {
 
 export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
   currentClip,
+  scriptLines,
   isPlaying,
   currentTime,
   duration,
@@ -49,7 +52,7 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
   };
 
   const [isExporting, setIsExporting] = useState(false);
-  const scriptLine = findScriptLine(currentClip?.scriptLineId);
+  const scriptLine = findScriptLine(scriptLines, currentClip?.scriptLineId);
   const fit = scriptLine && duration > 0 ? checkFit(scriptLine, duration / playbackRate) : undefined;
 
   const saveFile = (href: string, name: string) => {

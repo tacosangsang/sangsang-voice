@@ -3,6 +3,7 @@ import { CinematicViewer } from './components/CinematicViewer';
 import { VoiceSelector } from './components/VoiceSelector';
 import { AudioPlayerBar } from './components/AudioPlayerBar';
 import { CustomStudioModal } from './components/CustomStudioModal';
+import { useScript } from './script/useScript';
 import { SceneManagerModal } from './components/SceneManagerModal';
 import { DubbingPreset, DubbingItem, SceneItem } from './types';
 import { DEFAULT_SCENES } from './data/defaultScenes';
@@ -71,6 +72,7 @@ const DEFAULT_PRESETS: DubbingPreset[] = [
 ];
 
 export default function App() {
+  const { script, isLoading: isScriptLoading, reload: reloadScript } = useScript();
   const [presets, setPresets] = useState<DubbingPreset[]>(DEFAULT_PRESETS);
   const [activePresetId, setActivePresetId] = useState<string>('charon-elegant');
   const [currentClip, setCurrentClip] = useState<DubbingItem | null>(null);
@@ -498,6 +500,7 @@ export default function App() {
         {/* Audio Player Controls Bar */}
         <AudioPlayerBar
           currentClip={currentClip}
+          scriptLines={script.lines}
           isPlaying={isPlaying}
           currentTime={currentTime}
           duration={duration}
@@ -624,6 +627,9 @@ export default function App() {
         onClose={() => setIsCustomStudioOpen(false)}
         isLoading={isLoading}
         onGenerate={handleCustomGenerate}
+        script={script}
+        isScriptLoading={isScriptLoading}
+        onReloadScript={reloadScript}
       />
 
       {/* Scene Manager Modal */}
