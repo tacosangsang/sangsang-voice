@@ -63,7 +63,7 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
 
   const baseName = () => {
     const prefix = scriptLine ? scriptLine.cut.replace('#', '') : 'dub';
-    return `${prefix}_${currentClip?.voiceName}_${Date.now()}`;
+    return `${prefix}_${currentClip?.language ?? 'ko'}_${currentClip?.voiceName}_${Date.now()}`;
   };
 
   // 원본: TTS가 만든 음성 그대로

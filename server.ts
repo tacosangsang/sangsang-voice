@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
 import { isWavMime, parsePcmMime, wrapPcm16AsWav } from './src/shared/wav';
+import { LANGUAGES, toLanguage } from './src/shared/language';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -57,7 +58,7 @@ const PRESETS: DubbingPreset[] = [
     badge: '추천 • 시네마틱',
     description: '서늘하고 여유로운 신사. 낮고 우아하며 비밀을 속삭이듯 냉정한 어조',
     stylePrompt:
-      'A sophisticated, chillingly calm, polite yet deeply sinister gentleman in a tailored white suit whispering cynical philosophical truths in Korean with subtle breath pauses and cold elegance.',
+      'A sophisticated, chillingly calm, polite yet deeply sinister gentleman in a tailored white suit whispering cynical philosophical truths with subtle breath pauses and cold elegance.',
     formattedText: '신은 두 접시 중 하나만 고릅니다. <breath> 다른 하나가 초라하면 더 쉽겠지요.',
     characterDescription:
       '하얀 정장을 입고 붉은 눈의 토끼 가면을 쓴 의문의 신사. 요리사의 귀에 다가가 냉소적인 제안을 건네는 순간',
@@ -196,6 +197,9 @@ app.post('/api/dubbing/generate', async (req, res) => {
       stylePrompt = 'A chilling, calm, sophisticated and cynical Korean voice with subtle breath',
       modelPreference = 'gemini-3.8-flash-tts',
     } = req.body;
+    const language = toLanguage(req.body.language);
+    // 언어 지시는 서버 한 곳에서만 붙인다. 프리셋 지시문에는 언어를 적지 않는다.
+    const styleWithLanguage = `${stylePrompt.trim()} ${LANGUAGES[language].ttsInstruction}`;
 
     if (!process.env.GEMINI_API_KEY) {
       return res.status(500).json({
@@ -223,7 +227,7 @@ app.post('/api/dubbing/generate', async (req, res) => {
               {
                 text: cleanText,
                 speechMetadata: {
-                  style: stylePrompt,
+                  style: styleWithLanguage,
                 },
               },
             ],
@@ -257,7 +261,7 @@ app.post('/api/dubbing/generate', async (req, res) => {
                 {
                   text: cleanText.replace(/<[^>]+>/g, ''), // strip vocal tags if lite
                   speechMetadata: {
-                    style: stylePrompt,
+                    style: styleWithLanguage,
                   },
                 },
               ],
@@ -289,6 +293,7 @@ app.post('/api/dubbing/generate', async (req, res) => {
       mimeType: 'audio/wav',
       sourceMimeType: audio.sourceMimeType,
       voiceName,
+      language,
       usedModel,
       text: cleanText,
       timestamp: Date.now(),

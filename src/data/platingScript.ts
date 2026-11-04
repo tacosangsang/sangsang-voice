@@ -1,5 +1,8 @@
 // PLATING 녹음 대본. 정본은 노션「스토리보드/컷표」페이지 맨 끝의 "녹음 대본 (인물별 대사)" 섹션이다.
 // 컷표 대사가 바뀌면 이 파일을 노션에 맞춰 다시 만든다. 이 파일을 먼저 고치지 않는다.
+// 영어 대사(textEn)는 아직 정본이 없다. 정해지면 노션에 먼저 적고 여기에 옮긴다.
+
+import { DialogueLanguage } from '../shared/language';
 
 export type SpeakerId =
   | 'anchor'
@@ -23,7 +26,10 @@ export interface ScriptLine {
   /** 컷표의 컷 길이(초) */
   cutSeconds: number;
   speaker: SpeakerId;
+  /** 한국어 대사 (정본) */
   text: string;
+  /** 영어 대사. 없으면 직접 입력 */
+  textEn?: string;
   situation: string;
 }
 
@@ -87,6 +93,11 @@ export interface FitResult {
 export function checkFit(line: ScriptLine, audioSeconds: number): FitResult {
   const overSeconds = audioSeconds - line.cutSeconds;
   return { overSeconds, fits: overSeconds <= 0 };
+}
+
+/** 언어별 대사. 그 언어 대사가 없으면 undefined */
+export function lineText(line: ScriptLine, language: DialogueLanguage): string | undefined {
+  return language === 'en' ? line.textEn : line.text;
 }
 
 export function findScriptLine(id: string | undefined): ScriptLine | undefined {
