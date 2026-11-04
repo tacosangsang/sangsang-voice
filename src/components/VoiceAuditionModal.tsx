@@ -14,15 +14,23 @@ interface VoiceAuditionModalProps {
 
 const CHOICE_KEY = 'plating-voice-audition-choices';
 
+/** 확정한 목소리와 그때의 지시문. 지시문을 고쳐 들어 보고 골랐다면 그 지시문까지가 선택이다. */
+interface Choice {
+  voiceName: string;
+  style: string;
+}
+
 interface Take {
   url?: string;
   error?: string;
   loading?: boolean;
 }
 
-function loadChoices(): Partial<Record<SpeakerId, string>> {
+function loadChoices(): Partial<Record<SpeakerId, Choice>> {
   try {
-    return JSON.parse(localStorage.getItem(CHOICE_KEY) ?? '{}');
+    const saved = JSON.parse(localStorage.getItem(CHOICE_KEY) ?? '{}');
+    // 예전 저장 형식(목소리 이름만)은 버린다.
+    return Object.fromEntries(Object.entries(saved).filter(([, v]) => typeof v === 'object' && v !== null));
   } catch {
     return {};
   }
@@ -30,14 +38,19 @@ function loadChoices(): Partial<Record<SpeakerId, string>> {
 
 export const VoiceAuditionModal: React.FC<VoiceAuditionModalProps> = ({ isOpen, onClose }) => {
   const [lineBySpeaker, setLineBySpeaker] = useState<Partial<Record<SpeakerId, string>>>({});
-  const [styleBySpeaker, setStyleBySpeaker] = useState<Partial<Record<SpeakerId, string>>>({});
   const [choices, setChoices] = useState(loadChoices);
+  const [styleBySpeaker, setStyleBySpeaker] = useState<Partial<Record<SpeakerId, string>>>(() =>
+    Object.fromEntries(Object.entries(choices).map(([id, c]) => [id, c!.style])),
+  );
   // 키: 화자|목소리|대본 줄|지시문. 조건이 하나라도 바뀌면 새로 생성한다.
   const [takes, setTakes] = useState<Record<string, Take>>({});
   const [callCount, setCallCount] = useState(0);
   const [playingKey, setPlayingKey] = useState<string>();
   const [copied, setCopied] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  // 창을 닫은 뒤 도착한 생성 결과는 저장만 하고 재생하지 않는다.
+  const isOpenRef = useRef(isOpen);
+  isOpenRef.current = isOpen;
 
   useEffect(() => {
     try {
@@ -82,16 +95,16 @@ export const VoiceAuditionModal: React.FC<VoiceAuditionModalProps> = ({ isOpen, 
       if (!res.ok) throw new Error(data.error || `생성 실패 (${res.status})`);
       const url = `data:${data.mimeType || 'audio/wav'};base64,${data.audioBase64}`;
       setTakes((prev) => ({ ...prev, [key]: { url } }));
-      play(key, url);
+      if (isOpenRef.current) play(key, url);
     } catch (err: any) {
       setTakes((prev) => ({ ...prev, [key]: { error: err.message || '생성 실패' } }));
     }
   };
 
   const resultText = SPEAKER_AUDITIONS.map((a) => {
-    const voice = choices[a.speaker];
-    const style = styleBySpeaker[a.speaker] ?? a.baseStyle;
-    return `${speakerName(a.speaker)}: ${voice ?? '(미정)'}${style !== a.baseStyle ? ` / 지시문 수정: ${style}` : ''}`;
+    const choice = choices[a.speaker];
+    if (!choice) return `${speakerName(a.speaker)}: (미정)`;
+    return `${speakerName(a.speaker)}: ${choice.voiceName}${choice.style !== a.baseStyle ? ` / 지시문 수정: ${choice.style}` : ''}`;
   }).join('\n');
 
   const copyResult = async () => {
@@ -134,7 +147,7 @@ export const VoiceAuditionModal: React.FC<VoiceAuditionModalProps> = ({ isOpen, 
               <section key={a.speaker} className="rounded-xl border border-neutral-800 bg-neutral-950/50 p-4 space-y-3">
                 <div className="flex items-center justify-between gap-3">
                   <h3 className="text-sm font-bold text-white">{speakerName(a.speaker)}</h3>
-                  <span className="text-[11px] text-neutral-500">확정: {choices[a.speaker] ?? '미정'}</span>
+                  <span className="text-[11px] text-neutral-500">확정: {choices[a.speaker]?.voiceName ?? '미정'}</span>
                 </div>
 
                 <select
@@ -161,7 +174,7 @@ export const VoiceAuditionModal: React.FC<VoiceAuditionModalProps> = ({ isOpen, 
                   {a.candidates.map((c) => {
                     const key = `${a.speaker}|${c.voiceName}|${line.id}|${style}`;
                     const take = takes[key];
-                    const chosen = choices[a.speaker] === c.voiceName;
+                    const chosen = choices[a.speaker]?.voiceName === c.voiceName && choices[a.speaker]?.style === style;
                     return (
                       <div
                         key={c.voiceName}
@@ -191,7 +204,7 @@ export const VoiceAuditionModal: React.FC<VoiceAuditionModalProps> = ({ isOpen, 
                             </button>
                           )}
                           <button
-                            onClick={() => setChoices((prev) => ({ ...prev, [a.speaker]: c.voiceName }))}
+                            onClick={() => setChoices((prev) => ({ ...prev, [a.speaker]: { voiceName: c.voiceName, style } }))}
                             className={`flex items-center justify-center gap-1 rounded-md px-2 py-1.5 text-[11px] ${
                               chosen ? 'bg-red-600 text-white' : 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700'
                             }`}
