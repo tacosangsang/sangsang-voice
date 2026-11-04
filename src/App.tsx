@@ -7,6 +7,7 @@ import { SceneManagerModal } from './components/SceneManagerModal';
 import { DubbingPreset, DubbingItem, SceneItem } from './types';
 import { DEFAULT_SCENES } from './data/defaultScenes';
 import { audioEngine } from './utils/audioEngine';
+import { DialogueLanguage } from './shared/language';
 import {
   Sparkles,
   Film,
@@ -26,7 +27,7 @@ const DEFAULT_PRESETS: DubbingPreset[] = [
     badge: '추천 • 시네마틱',
     description: '서늘하고 여유로운 신사. 낮고 우아하며 비밀을 속삭이듯 냉정한 어조',
     stylePrompt:
-      'A sophisticated, chillingly calm, polite yet deeply sinister gentleman in a tailored white suit whispering cynical philosophical truths in Korean with subtle breath pauses and cold elegance.',
+      'A sophisticated, chillingly calm, polite yet deeply sinister gentleman in a tailored white suit whispering cynical philosophical truths with subtle breath pauses and cold elegance.',
     formattedText: '신은 두 접시 중 하나만 고릅니다. <breath> 다른 하나가 초라하면 더 쉽겠지요.',
     characterDescription:
       '하얀 정장을 입고 붉은 눈의 토끼 가면을 쓴 의문의 신사. 요리사의 귀에 다가가 냉소적인 제안을 건네는 순간',
@@ -314,6 +315,7 @@ export default function App() {
     stylePrompt: string;
     presetName: string;
     scriptLineId?: string;
+    language: DialogueLanguage;
   }) => {
     setIsLoading(true);
     setErrorMsg(null);
@@ -326,6 +328,7 @@ export default function App() {
           text: customData.text,
           voiceName: customData.voiceName,
           stylePrompt: customData.stylePrompt,
+          language: customData.language,
         }),
       });
 
@@ -344,6 +347,7 @@ export default function App() {
         text: customData.text,
         stylePrompt: customData.stylePrompt,
         scriptLineId: customData.scriptLineId,
+        language: customData.language,
         audioBase64: data.audioBase64,
         mimeType: data.mimeType || 'audio/wav',
         audioUrl,

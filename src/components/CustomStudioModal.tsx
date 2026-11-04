@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Sparkles, Mic, Volume2, Wand2, Plus } from 'lucide-react';
-import { PLATING_SCRIPT, SPEAKERS, findScriptLine } from '../data/platingScript';
+import { PLATING_SCRIPT, SPEAKERS, findScriptLine, lineText } from '../data/platingScript';
+import { DialogueLanguage, LANGUAGES, DEFAULT_LANGUAGE } from '../shared/language';
 
 interface CustomStudioModalProps {
   isOpen: boolean;
@@ -12,6 +13,7 @@ interface CustomStudioModalProps {
     stylePrompt: string;
     presetName: string;
     scriptLineId?: string;
+    language: DialogueLanguage;
   }) => Promise<void>;
 }
 
@@ -24,19 +26,31 @@ export const CustomStudioModal: React.FC<CustomStudioModalProps> = ({
   const [text, setText] = useState('신은 두 접시 중 하나만 고릅니다. <breath> 다른 하나가 초라하면 더 쉽겠지요.');
   const [voiceName, setVoiceName] = useState('Charon');
   const [stylePrompt, setStylePrompt] = useState(
-    'A sophisticated, chillingly calm, polite yet deeply sinister gentleman in a tailored white suit whispering cynical philosophical truths in Korean with subtle breath pauses and cold elegance.'
+    'A sophisticated, chillingly calm, polite yet deeply sinister gentleman in a tailored white suit whispering cynical philosophical truths with subtle breath pauses and cold elegance.'
   );
 
   const [scriptLineId, setScriptLineId] = useState<string>('');
+  const [language, setLanguage] = useState<DialogueLanguage>(DEFAULT_LANGUAGE);
   const scriptLine = findScriptLine(scriptLineId);
 
   if (!isOpen) return null;
 
+  const fillFromLine = (id: string, lang: DialogueLanguage) => {
+    const line = findScriptLine(id);
+    if (line) setText(lineText(line, lang) ?? '');
+  };
+
   const handlePickLine = (id: string) => {
     setScriptLineId(id);
-    const line = findScriptLine(id);
-    if (line) setText(line.text);
+    fillFromLine(id, language);
   };
+
+  const handlePickLanguage = (lang: DialogueLanguage) => {
+    setLanguage(lang);
+    if (scriptLineId) fillFromLine(scriptLineId, lang);
+  };
+
+  const missingTranslation = !!scriptLine && !lineText(scriptLine, language);
 
   const insertTag = (tag: string) => {
     setText((prev) => prev + ` ${tag} `);
@@ -45,7 +59,7 @@ export const CustomStudioModal: React.FC<CustomStudioModalProps> = ({
   const styleSuggestions = [
     {
       label: '우아한 악마',
-      prompt: 'A sophisticated, chillingly calm, polite yet deeply sinister gentleman in a tailored white suit whispering cynical philosophical truths in Korean with subtle breath pauses and cold elegance.',
+      prompt: 'A sophisticated, chillingly calm, polite yet deeply sinister gentleman in a tailored white suit whispering cynical philosophical truths with subtle breath pauses and cold elegance.',
       voice: 'Charon',
     },
     {
@@ -75,6 +89,7 @@ export const CustomStudioModal: React.FC<CustomStudioModalProps> = ({
       stylePrompt,
       presetName: scriptLine ? `${scriptLine.cut} ${voiceName}` : `커스텀 더빙 (${voiceName})`,
       scriptLineId: scriptLine && text.trim() ? scriptLine.id : undefined,
+      language,
     });
     onClose();
   };
@@ -105,6 +120,29 @@ export const CustomStudioModal: React.FC<CustomStudioModalProps> = ({
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-6 space-y-5 max-h-[80vh] overflow-y-auto">
+          {/* 대사 언어 */}
+          <div className="space-y-2">
+            <span className="text-xs font-semibold text-neutral-300">대사 언어</span>
+            <div className="flex gap-2" role="radiogroup" aria-label="대사 언어">
+              {Object.values(LANGUAGES).map((l) => (
+                <button
+                  key={l.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={language === l.id}
+                  onClick={() => handlePickLanguage(l.id)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                    language === l.id
+                      ? 'bg-red-950/40 border-red-500 text-white'
+                      : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-neutral-200'
+                  }`}
+                >
+                  {l.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* PLATING 대본 줄 선택 */}
           <div className="space-y-2">
             <label htmlFor="plating-line" className="text-xs font-semibold text-neutral-300">
@@ -130,6 +168,11 @@ export const CustomStudioModal: React.FC<CustomStudioModalProps> = ({
             {scriptLine && (
               <p className="text-[11px] text-neutral-500 leading-relaxed">
                 {scriptLine.tc} · 컷 {scriptLine.cutSeconds}s · {scriptLine.situation}
+              </p>
+            )}
+            {missingTranslation && (
+              <p className="text-[11px] text-amber-400">
+                이 줄은 {LANGUAGES[language].label} 대사가 아직 없습니다. 아래에 직접 입력하세요. 원문: {scriptLine?.text}
               </p>
             )}
           </div>

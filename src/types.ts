@@ -1,3 +1,5 @@
+import { DialogueLanguage } from './shared/language';
+
 export interface SceneItem {
   id: string;
   title: string;
@@ -37,6 +39,7 @@ export interface DubbingItem {
   duration?: number;
   /** PLATING 대본 줄(컷 번호). 컷 길이 비교와 파일 이름에 쓴다. */
   scriptLineId?: string;
+  language?: DialogueLanguage;
   createdAt: number;
 }
 
