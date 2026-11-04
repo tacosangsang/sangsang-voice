@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Sparkles, Mic, Volume2, Wand2, Plus } from 'lucide-react';
+import { PLATING_SCRIPT, SPEAKERS, findScriptLine } from '../data/platingScript';
 
 interface CustomStudioModalProps {
   isOpen: boolean;
@@ -10,6 +11,7 @@ interface CustomStudioModalProps {
     voiceName: string;
     stylePrompt: string;
     presetName: string;
+    scriptLineId?: string;
   }) => Promise<void>;
 }
 
@@ -25,7 +27,16 @@ export const CustomStudioModal: React.FC<CustomStudioModalProps> = ({
     'A sophisticated, chillingly calm, polite yet deeply sinister gentleman in a tailored white suit whispering cynical philosophical truths in Korean with subtle breath pauses and cold elegance.'
   );
 
+  const [scriptLineId, setScriptLineId] = useState<string>('');
+  const scriptLine = findScriptLine(scriptLineId);
+
   if (!isOpen) return null;
+
+  const handlePickLine = (id: string) => {
+    setScriptLineId(id);
+    const line = findScriptLine(id);
+    if (line) setText(line.text);
+  };
 
   const insertTag = (tag: string) => {
     setText((prev) => prev + ` ${tag} `);
@@ -62,7 +73,8 @@ export const CustomStudioModal: React.FC<CustomStudioModalProps> = ({
       text: text.trim(),
       voiceName,
       stylePrompt,
-      presetName: `커스텀 더빙 (${voiceName})`,
+      presetName: scriptLine ? `${scriptLine.cut} ${voiceName}` : `커스텀 더빙 (${voiceName})`,
+      scriptLineId: scriptLine && text.trim() ? scriptLine.id : undefined,
     });
     onClose();
   };
@@ -93,6 +105,35 @@ export const CustomStudioModal: React.FC<CustomStudioModalProps> = ({
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-6 space-y-5 max-h-[80vh] overflow-y-auto">
+          {/* PLATING 대본 줄 선택 */}
+          <div className="space-y-2">
+            <label htmlFor="plating-line" className="text-xs font-semibold text-neutral-300">
+              PLATING 대본에서 불러오기
+            </label>
+            <select
+              id="plating-line"
+              value={scriptLineId}
+              onChange={(e) => handlePickLine(e.target.value)}
+              className="w-full rounded-xl bg-neutral-950 border border-neutral-800 p-2.5 text-xs text-neutral-200 focus:outline-none focus:border-red-500/80"
+            >
+              <option value="">직접 입력 (대본 줄 없음)</option>
+              {SPEAKERS.map((sp) => (
+                <optgroup key={sp.id} label={sp.name}>
+                  {PLATING_SCRIPT.filter((l) => l.speaker === sp.id).map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.cut} ({l.cutSeconds}s) {l.text.slice(0, 28)}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+            {scriptLine && (
+              <p className="text-[11px] text-neutral-500 leading-relaxed">
+                {scriptLine.tc} · 컷 {scriptLine.cutSeconds}s · {scriptLine.situation}
+              </p>
+            )}
+          </div>
+
           {/* Script Text Input */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">

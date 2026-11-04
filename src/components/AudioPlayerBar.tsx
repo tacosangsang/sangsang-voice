@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Play, Pause, RotateCcw, Download, Sliders, Volume2, Sparkles, Mic, Layers } from 'lucide-react';
 import { DubbingItem } from '../types';
+import { checkFit, findScriptLine } from '../data/platingScript';
+import { effectsFromSettings, renderWithEffects } from '../audio/offlineRender';
 
 interface AudioPlayerBarProps {
   currentClip: DubbingItem | null;
@@ -46,14 +48,47 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
-  const handleDownload = () => {
-    if (!currentClip) return;
+  const [isExporting, setIsExporting] = useState(false);
+  const scriptLine = findScriptLine(currentClip?.scriptLineId);
+  const fit = scriptLine && duration > 0 ? checkFit(scriptLine, duration / playbackRate) : undefined;
+
+  const saveFile = (href: string, name: string) => {
     const link = document.createElement('a');
-    link.href = currentClip.audioUrl;
-    link.download = `rabbit_dubbing_${currentClip.voiceName}_${Date.now()}.wav`;
+    link.href = href;
+    link.download = name;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const baseName = () => {
+    const prefix = scriptLine ? scriptLine.cut.replace('#', '') : 'dub';
+    return `${prefix}_${currentClip?.voiceName}_${Date.now()}`;
+  };
+
+  // 원본: TTS가 만든 음성 그대로
+  const handleDownload = () => {
+    if (!currentClip) return;
+    saveFile(currentClip.audioUrl, `${baseName()}_raw.wav`);
+  };
+
+  // 효과 포함: 지금 들리는 잔향·드론을 입혀 렌더 (재생 속도는 제외, offlineRender.ts 주석 참고)
+  const handleDownloadWithEffects = async () => {
+    if (!currentClip || isExporting) return;
+    setIsExporting(true);
+    try {
+      const blob = await renderWithEffects(
+        currentClip.audioUrl,
+        effectsFromSettings({ reverb: reverbAmount, darkDrone: atmosphereDrone })
+      );
+      const url = URL.createObjectURL(blob);
+      saveFile(url, `${baseName()}_fx.wav`);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e) {
+      console.error('효과 렌더 실패:', e);
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
@@ -113,10 +148,39 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
             title="WAV 음원 다운로드"
           >
             <Download className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">WAV 다운로드</span>
+            <span className="hidden md:inline">원본 WAV</span>
+          </button>
+          <button
+            disabled={!currentClip || isExporting}
+            onClick={handleDownloadWithEffects}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-neutral-800 hover:bg-neutral-700 disabled:opacity-40 text-neutral-200 border border-neutral-700 transition-colors"
+            title="잔향·드론을 입힌 WAV (재생 속도는 포함하지 않음)"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span className="hidden md:inline">{isExporting ? '렌더 중…' : '효과 포함 WAV'}</span>
           </button>
         </div>
       </div>
+
+      {/* PLATING 컷 길이 비교 */}
+      {scriptLine && (
+        <div
+          className={`mt-3 px-3 py-2 rounded-lg text-xs flex flex-wrap gap-x-4 gap-y-1 border ${
+            fit && !fit.fits
+              ? 'bg-red-950/50 border-red-800/70 text-red-200'
+              : 'bg-neutral-950 border-neutral-800 text-neutral-300'
+          }`}
+        >
+          <span className="font-mono">{scriptLine.cut}</span>
+          <span>컷 {scriptLine.cutSeconds}s</span>
+          <span>음성 {fit ? (duration / playbackRate).toFixed(1) : '-'}s</span>
+          {fit && (
+            <span className="font-semibold">
+              {fit.fits ? `여유 ${(-fit.overSeconds).toFixed(1)}s` : `초과 ${fit.overSeconds.toFixed(1)}s`}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Scrubber & Player Controls */}
       <div className="mt-4 space-y-3">
