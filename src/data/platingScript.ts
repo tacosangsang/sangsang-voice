@@ -100,11 +100,12 @@ export function lineText(line: ScriptLine, language: DialogueLanguage): string |
 }
 
 const TAG = /<[^<>]*>/g;
-const normalize = (s: string) => s.replace(/\s+/g, ' ').trim();
+// 태그가 글자나 문장부호에 붙어 있어도, 띄어 쓰여 있어도 같게 보도록 공백은 모두 빼고 비교한다.
+const withoutSpaces = (s: string) => s.replace(/\s+/g, '');
 
-/** 태그를 뺀 문장이 원래 대사와 같은지. 다르면 TTS 대사가 대사를 바꾼 것이다. */
+/** 태그를 뺀 문장이 원래 대사와 같은지(띄어쓰기는 보지 않는다). 다르면 TTS 대사가 대사를 바꾼 것이다. */
 export function ttsTextMatches(text: string, ttsText: string): boolean {
-  return normalize(ttsText.replace(TAG, ' ')) === normalize(text);
+  return withoutSpaces(ttsText.replace(TAG, '')) === withoutSpaces(text);
 }
 
 export function findScriptLine(lines: ScriptLine[], id: string | undefined): ScriptLine | undefined {
