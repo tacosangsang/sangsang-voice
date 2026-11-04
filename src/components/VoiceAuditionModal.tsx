@@ -1,10 +1,12 @@
-// 화자별 목소리 비교. 후보마다 같은 대사·같은 지시문으로 생성해 들어 보고 하나를 고른다.
+// 화자별 목소리 비교. 후보마다 같은 대사·같은 지시문으로 한국어와 영어를 생성해 들어 보고 하나를 고른다.
+// 영어는 대본 줄의 textEn이 있을 때만 생성할 수 있다(영어 대사는 지어 넣지 않는다).
 // 생성 버튼 한 번이 TTS 호출 1회다. 같은 조건으로 이미 만든 음성은 다시 부르지 않고 재생만 한다.
 // 고른 결과는 이 브라우저에만 저장되므로 "결과 복사"로 옮겨 적는다.
 
 import React, { useEffect, useRef, useState } from 'react';
 import { X, Play, Square, Loader2, Check, Copy, Mic2 } from 'lucide-react';
-import { PLATING_SCRIPT, SPEAKERS, SpeakerId } from '../data/platingScript';
+import { PLATING_SCRIPT, SPEAKERS, SpeakerId, lineText } from '../data/platingScript';
+import { DialogueLanguage, LANGUAGES } from '../shared/language';
 import { SPEAKER_AUDITIONS } from '../data/voiceCandidates';
 
 interface VoiceAuditionModalProps {
@@ -84,14 +86,14 @@ export const VoiceAuditionModal: React.FC<VoiceAuditionModalProps> = ({ isOpen, 
     setPlayingKey(undefined);
   };
 
-  const generate = async (key: string, text: string, voiceName: string, stylePrompt: string) => {
+  const generate = async (key: string, text: string, voiceName: string, stylePrompt: string, language: DialogueLanguage) => {
     setTakes((prev) => ({ ...prev, [key]: { loading: true } }));
     setCallCount((n) => n + 1);
     try {
       const res = await fetch('/api/dubbing/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, voiceName, stylePrompt, language: 'ko' }),
+        body: JSON.stringify({ text, voiceName, stylePrompt, language }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || `생성 실패 (${res.status})`);
@@ -163,6 +165,9 @@ export const VoiceAuditionModal: React.FC<VoiceAuditionModalProps> = ({ isOpen, 
                     </option>
                   ))}
                 </select>
+                <p className="text-[11px] text-neutral-500">
+                  English: {line.textEn ?? '영어 대사가 아직 대본에 없습니다.'}
+                </p>
 
                 <textarea
                   value={style}
@@ -174,8 +179,6 @@ export const VoiceAuditionModal: React.FC<VoiceAuditionModalProps> = ({ isOpen, 
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   {a.candidates.map((c) => {
-                    const key = `${a.speaker}|${c.voiceName}|${line.id}|${style}`;
-                    const take = takes[key];
                     const chosen = choices[a.speaker]?.voiceName === c.voiceName && choices[a.speaker]?.style === style;
                     return (
                       <div
@@ -186,36 +189,44 @@ export const VoiceAuditionModal: React.FC<VoiceAuditionModalProps> = ({ isOpen, 
                           <span className="text-xs font-bold text-white">{c.voiceName}</span>
                           <span className="text-[10px] text-neutral-500">{c.trait}</span>
                         </div>
-                        <div className="flex gap-1.5">
-                          {take?.url ? (
-                            <button
-                              onClick={() => (playingKey === key ? stop() : play(key, take.url!))}
-                              className="flex-1 flex items-center justify-center gap-1 rounded-md bg-neutral-800 hover:bg-neutral-700 py-1.5 text-[11px] text-white"
-                            >
-                              {playingKey === key ? <Square className="w-3 h-3" /> : <Play className="w-3 h-3" />}
-                              {playingKey === key ? '정지' : '재생'}
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => generate(key, line.text, c.voiceName, style)}
-                              disabled={take?.loading}
-                              className="flex-1 flex items-center justify-center gap-1 rounded-md bg-red-700 hover:bg-red-600 disabled:opacity-60 py-1.5 text-[11px] text-white"
-                            >
-                              {take?.loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
-                              {take?.loading ? '생성 중' : '생성'}
-                            </button>
-                          )}
-                          <button
-                            onClick={() => setChoices((prev) => ({ ...prev, [a.speaker]: { voiceName: c.voiceName, style } }))}
-                            className={`flex items-center justify-center gap-1 rounded-md px-2 py-1.5 text-[11px] ${
-                              chosen ? 'bg-red-600 text-white' : 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700'
-                            }`}
-                          >
-                            <Check className="w-3 h-3" />
-                            확정
-                          </button>
-                        </div>
-                        {take?.error && <p className="text-[10px] text-red-400 break-words">{take.error}</p>}
+                        {(Object.keys(LANGUAGES) as DialogueLanguage[]).map((lang) => {
+                          // 같은 목소리로 한국어와 영어를 나란히 들어 비교한다. 키에 언어가 들어가 따로 보관된다.
+                          const key = `${a.speaker}|${c.voiceName}|${line.id}|${style}|${lang}`;
+                          const take = takes[key];
+                          const text = lineText(line, lang);
+                          return (
+                            <div key={lang} className="space-y-1">
+                              {take?.url ? (
+                                <button
+                                  onClick={() => (playingKey === key ? stop() : play(key, take.url!))}
+                                  className="w-full flex items-center justify-center gap-1 rounded-md bg-neutral-800 hover:bg-neutral-700 py-1.5 text-[11px] text-white"
+                                >
+                                  {playingKey === key ? <Square className="w-3 h-3" /> : <Play className="w-3 h-3" />}
+                                  {LANGUAGES[lang].label} {playingKey === key ? '정지' : '재생'}
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => text && generate(key, text, c.voiceName, style, lang)}
+                                  disabled={!text || take?.loading}
+                                  className="w-full flex items-center justify-center gap-1 rounded-md bg-red-700 hover:bg-red-600 disabled:bg-neutral-800 disabled:text-neutral-500 py-1.5 text-[11px] text-white"
+                                >
+                                  {take?.loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
+                                  {LANGUAGES[lang].label} {take?.loading ? '생성 중' : text ? '생성' : '대사 없음'}
+                                </button>
+                              )}
+                              {take?.error && <p className="text-[10px] text-red-400 break-words">{take.error}</p>}
+                            </div>
+                          );
+                        })}
+                        <button
+                          onClick={() => setChoices((prev) => ({ ...prev, [a.speaker]: { voiceName: c.voiceName, style } }))}
+                          className={`w-full flex items-center justify-center gap-1 rounded-md py-1.5 text-[11px] ${
+                            chosen ? 'bg-red-600 text-white' : 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700'
+                          }`}
+                        >
+                          <Check className="w-3 h-3" />
+                          확정
+                        </button>
                       </div>
                     );
                   })}
