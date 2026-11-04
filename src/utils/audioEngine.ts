@@ -1,3 +1,6 @@
+import { buildImpulseResponse, REVERB_TAIL_SEC } from '../audio/effects';
+
+// 실시간 재생 엔진. 내보내기는 src/audio/offlineRender.ts가 같은 효과 정의(src/audio/effects.ts)로 렌더한다.
 export class CinematicAudioEngine {
   private ctx: AudioContext | null = null;
   private audioElement: HTMLAudioElement | null = null;
@@ -41,7 +44,7 @@ export class CinematicAudioEngine {
 
     // Create algorithmic impulse response for cinematic hall reverb
     this.convolver = this.ctx.createConvolver();
-    this.convolver.buffer = this.buildImpulseResponse(this.ctx, 2.5, 2.0);
+    this.convolver.buffer = buildImpulseResponse(this.ctx, REVERB_TAIL_SEC, 2.0);
 
     // Route: source -> dryGain -> analyser -> master -> destination
     //        source -> convolver -> wetGain -> analyser
@@ -134,21 +137,6 @@ export class CinematicAudioEngine {
     return dataArray;
   }
 
-  private buildImpulseResponse(ctx: AudioContext, duration: number, decay: number): AudioBuffer {
-    const rate = ctx.sampleRate;
-    const length = Math.floor(rate * duration);
-    const impulse = ctx.createBuffer(2, length, rate);
-    const left = impulse.getChannelData(0);
-    const right = impulse.getChannelData(1);
-
-    for (let i = 0; i < length; i++) {
-      const n = i / length;
-      const factor = Math.exp(-n * decay);
-      left[i] = (Math.random() * 2 - 1) * factor;
-      right[i] = (Math.random() * 2 - 1) * factor;
-    }
-    return impulse;
-  }
 }
 
 export const audioEngine = new CinematicAudioEngine();

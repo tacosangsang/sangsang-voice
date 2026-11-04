@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
+import { isWavMime, parsePcmMime, wrapPcm16AsWav } from './src/shared/wav';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -99,6 +100,33 @@ const PRESETS: DubbingPreset[] = [
   },
 ];
 
+
+type GenaiResponse = Awaited<ReturnType<GoogleGenAI['models']['generateContent']>>;
+
+/**
+ * TTS 응답의 오디오 조각을 모두 이어 붙이고, raw PCM(audio/L16 등)이면 WAV 헤더를 씌운다.
+ * 응답 mimeType을 보지 않고 audio/wav로 붙이면 헤더 없는 PCM이 재생·다운로드되지 않는다.
+ */
+function extractWavAudio(response: GenaiResponse): { base64: string; sourceMimeType: string } | undefined {
+  const parts = (response.candidates?.[0]?.content?.parts ?? []).filter(
+    (p) => p.inlineData?.data && (p.inlineData.mimeType ?? 'audio/').startsWith('audio/')
+  );
+  if (parts.length === 0) return undefined;
+
+  const sourceMimeType = parts[0].inlineData?.mimeType ?? 'audio/L16;rate=24000';
+  const chunks = parts.map((p) => Buffer.from(p.inlineData!.data!, 'base64'));
+
+  if (isWavMime(sourceMimeType)) {
+    if (chunks.length > 1) {
+      console.warn('여러 WAV 조각이 왔지만 첫 조각만 사용합니다.');
+    }
+    return { base64: chunks[0].toString('base64'), sourceMimeType };
+  }
+  const pcm = new Uint8Array(Buffer.concat(chunks));
+  const wav = wrapPcm16AsWav(pcm, parsePcmMime(sourceMimeType));
+  return { base64: Buffer.from(wav).toString('base64'), sourceMimeType };
+}
+
 // Presets API
 app.get('/api/dubbing/presets', (_req, res) => {
   res.json({ presets: PRESETS });
@@ -117,7 +145,8 @@ app.post('/api/scenes/ai-generate', async (req, res) => {
     }
 
     const ai = getAiClient();
-    const enhancedPrompt = `Dark cinematic stop-motion claymation movie still, miniature clay puppet set, moody chiaroscuro lighting, eerie gothic thriller atmosphere: ${prompt.trim()}`;
+    // PLATING 규칙: 스톱모션·클레이·인형·미니어처·실사 연상 단어 금지. 색감만 흙빛 저채도, 깊은 그림자, 온·냉 대비.
+    const enhancedPrompt = `Cinematic animated film still, earthy desaturated palette, deep shadows, warm and cool light contrast, deep focus: ${prompt.trim()}`;
 
     const response = await ai.models.generateContent({
       model: 'gemini-3.1-flash-lite-image',
@@ -181,7 +210,7 @@ app.post('/api/dubbing/generate', async (req, res) => {
         ? 'gemini-3.8-flash-lite-tts'
         : 'gemini-3.8-flash-tts';
 
-    let base64Audio: string | undefined;
+    let audio: ReturnType<typeof extractWavAudio>;
     let usedModel = primaryModel;
 
     try {
@@ -210,7 +239,7 @@ app.post('/api/dubbing/generate', async (req, res) => {
         },
       });
 
-      base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      audio = extractWavAudio(response);
     } catch (err: any) {
       console.warn(
         `Primary TTS (${primaryModel}) failed, attempting fallback to gemini-3.8-flash-lite-tts:`,
@@ -243,21 +272,22 @@ app.post('/api/dubbing/generate', async (req, res) => {
             },
           },
         });
-        base64Audio = fallbackResponse.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+        audio = extractWavAudio(fallbackResponse);
       } else {
         throw err;
       }
     }
 
-    if (!base64Audio) {
+    if (!audio) {
       return res.status(502).json({
         error: '음성 생성 응답에 오디오 데이터가 포함되지 않았습니다.',
       });
     }
 
     res.json({
-      audioBase64: base64Audio,
+      audioBase64: audio.base64,
       mimeType: 'audio/wav',
+      sourceMimeType: audio.sourceMimeType,
       voiceName,
       usedModel,
       text: cleanText,

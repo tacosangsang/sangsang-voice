@@ -195,9 +195,6 @@ export default function App() {
       })
       .catch(() => {});
 
-    // Proactively generate the recommended Charon preset on load
-    handleGenerateDubbing(DEFAULT_PRESETS[0], false);
-
     return () => {
       audio.pause();
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -316,6 +313,7 @@ export default function App() {
     voiceName: string;
     stylePrompt: string;
     presetName: string;
+    scriptLineId?: string;
   }) => {
     setIsLoading(true);
     setErrorMsg(null);
@@ -345,6 +343,7 @@ export default function App() {
         voiceName: customData.voiceName,
         text: customData.text,
         stylePrompt: customData.stylePrompt,
+        scriptLineId: customData.scriptLineId,
         audioBase64: data.audioBase64,
         mimeType: data.mimeType || 'audio/wav',
         audioUrl,
