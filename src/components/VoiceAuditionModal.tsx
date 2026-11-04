@@ -7,7 +7,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { X, Play, Square, Loader2, Check, Copy, Mic2 } from 'lucide-react';
 import { PLATING_SCRIPT, SPEAKERS, SpeakerId, lineText } from '../data/platingScript';
 import { DialogueLanguage, LANGUAGES } from '../shared/language';
-import { SPEAKER_AUDITIONS } from '../data/voiceCandidates';
+import { GENDER_LABEL, SPEAKER_AUDITIONS, voiceOwner } from '../data/voiceCandidates';
 
 interface VoiceAuditionModalProps {
   isOpen: boolean;
@@ -31,9 +31,13 @@ interface Take {
 function loadChoices(): Partial<Record<SpeakerId, Choice>> {
   try {
     const saved = JSON.parse(localStorage.getItem(CHOICE_KEY) ?? '{}');
-    // 예전 저장 형식(목소리 이름만)은 버린다.
+    // 예전 저장 형식(목소리 이름만)과 지금 후보에 없는 목소리(성별 변경 등으로 빠진 것)는 버린다.
     return Object.fromEntries(
-      Object.entries(saved as Record<string, unknown>).filter(([, v]) => typeof v === 'object' && v !== null),
+      Object.entries(saved as Record<string, unknown>).filter(([id, v]) => {
+        const voiceName = (v as Partial<Choice> | null)?.voiceName;
+        const audition = SPEAKER_AUDITIONS.find((a) => a.speaker === id);
+        return !!voiceName && !!audition?.candidates.some((c) => c.voiceName === voiceName);
+      }),
     ) as Partial<Record<SpeakerId, Choice>>;
   } catch {
     return {};
@@ -150,7 +154,9 @@ export const VoiceAuditionModal: React.FC<VoiceAuditionModalProps> = ({ isOpen, 
             return (
               <section key={a.speaker} className="rounded-xl border border-neutral-800 bg-neutral-950/50 p-4 space-y-3">
                 <div className="flex items-center justify-between gap-3">
-                  <h3 className="text-sm font-bold text-white">{speakerName(a.speaker)}</h3>
+                  <h3 className="text-sm font-bold text-white">
+                    {speakerName(a.speaker)} <span className="text-[11px] font-normal text-neutral-500">({GENDER_LABEL[a.gender]})</span>
+                  </h3>
                   <span className="text-[11px] text-neutral-500">확정: {choices[a.speaker]?.voiceName ?? '미정'}</span>
                 </div>
 
@@ -180,6 +186,8 @@ export const VoiceAuditionModal: React.FC<VoiceAuditionModalProps> = ({ isOpen, 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   {a.candidates.map((c) => {
                     const chosen = choices[a.speaker]?.voiceName === c.voiceName && choices[a.speaker]?.style === style;
+                    // 한 목소리는 한 화자만. 다른 화자가 확정했으면 여기서는 확정할 수 없다.
+                    const owner = voiceOwner(choices, c.voiceName, a.speaker);
                     return (
                       <div
                         key={c.voiceName}
@@ -220,12 +228,13 @@ export const VoiceAuditionModal: React.FC<VoiceAuditionModalProps> = ({ isOpen, 
                         })}
                         <button
                           onClick={() => setChoices((prev) => ({ ...prev, [a.speaker]: { voiceName: c.voiceName, style } }))}
-                          className={`w-full flex items-center justify-center gap-1 rounded-md py-1.5 text-[11px] ${
+                          disabled={!!owner}
+                          className={`w-full flex items-center justify-center gap-1 rounded-md py-1.5 text-[11px] disabled:text-neutral-500 disabled:hover:bg-neutral-800 ${
                             chosen ? 'bg-red-600 text-white' : 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700'
                           }`}
                         >
                           <Check className="w-3 h-3" />
-                          확정
+                          {owner ? `${speakerName(owner)} 사용 중` : '확정'}
                         </button>
                       </div>
                     );
