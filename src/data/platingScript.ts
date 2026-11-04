@@ -1,20 +1,15 @@
 // PLATING 녹음 대본. 정본은 노션「스토리보드/컷표」페이지 맨 끝의 "녹음 대본 (인물별 대사)" 섹션이다.
-// 컷표 대사가 바뀌면 이 파일을 노션에 맞춰 다시 만든다. 이 파일을 먼저 고치지 않는다.
-// 영어 대사(textEn)는 아직 정본이 없다. 정해지면 노션에 먼저 적고 여기에 옮긴다.
+// 앱은 노션에서 바로 읽는다(src/script/). 이 파일은 노션 토큰이 없거나 읽기에 실패했을 때 쓰는 사본이다.
+// 이 파일을 먼저 고치지 않는다. 영어 대사(textEn)도 노션 표의 "영어 대사" 칸에서 읽는다.
 
 import { DialogueLanguage } from '../shared/language';
 
-export type SpeakerId =
-  | 'anchor'
-  | 'rabbit'
-  | 'purist-peacock'
-  | 'preserver-eagle'
-  | 'flamingo'
-  | 'backroom-voice'
-  | 'jinwoo';
+/** 아는 화자는 아래 SPEAKERS의 id, 노션에 새로 생긴 화자는 "notion:이름" */
+export type SpeakerId = string;
 
 export interface Speaker {
   id: SpeakerId;
+  /** 노션 섹션의 화자 이름(굵은 글씨)과 똑같아야 노션 줄이 이 화자로 묶인다 */
   name: string;
 }
 
@@ -31,6 +26,10 @@ export interface ScriptLine {
   /** 영어 대사. 없으면 직접 입력 */
   textEn?: string;
   situation: string;
+  /** 노션 "TTS 대사" 칸: 한국어 대사에 <sigh> <short pause> 같은 태그만 넣은 문장. 태그를 빼면 text와 같아야 한다. */
+  ttsText?: string;
+  /** 노션 "연기 지시" 칸: 이 줄만의 디렉션. 화자 프리셋 지시문 뒤에 붙는다. */
+  direction?: string;
 }
 
 export const SPEAKERS: Speaker[] = [
@@ -72,7 +71,7 @@ export const PLATING_SCRIPT: ScriptLine[] = [
   { id: "S#11-C015", cut: "S#11-C015", tc: "41.0–45.0", cutSeconds: 4, speaker: "rabbit", text: "마무리는 장인께서.", situation: "시계 '틱' 뒤, 진우에게 금색 의식 핀셋을 내밂" },
   { id: "S#14-C001", cut: "S#14-C001", tc: "00:00–08.0", cutSeconds: 8, speaker: "anchor", text: "신을 배신한 요리사가 신의 분노를 샀습니다. 그러나 신께서는 우리 인간을 품으셨습니다.", situation: "편집된 선전 방송, 환호·효과음 섞임" },
   { id: "S#14-C008", cut: "S#14-C008", tc: "27.0–29.5", cutSeconds: 2.5, speaker: "rabbit", text: "마무리는 장인께서.", situation: "도둑에게 핀셋과 금 간 구슬을 건넴. S#11-C015와 같은 높낮이" },
-  { id: "S#14-C020", cut: "S#14-C020", tc: "62.0–67.0", cutSeconds: 5, speaker: "anchor", text: "신의 시험입니다. 믿음이 부족해 신께서 양을 거두셨습니다.", situation: "하층 공용 화면 아래 배급 벌레를 씹는 같은 얼굴들. 다음 컷 통조림 둘(S#08 감축)로 이어짐" },
+  { id: "S#14-C020", cut: "S#14-C020", tc: "62.0–67.0", cutSeconds: 5, speaker: "anchor", text: "신의 시험입니다. 믿음이 부족해 신께서 양을 거두셨습니다.", situation: "하층 공용 화면 아래 배급 벌레를 씹는 같은 얼굴들. 다음 컷 통조림 둘로 이어짐" },
 ];
 
 /** 대사 속도 기준: 초당 약 6음절 */
@@ -95,11 +94,20 @@ export function checkFit(line: ScriptLine, audioSeconds: number): FitResult {
   return { overSeconds, fits: overSeconds <= 0 };
 }
 
-/** 언어별 대사. 그 언어 대사가 없으면 undefined */
+/** TTS에 넣을 언어별 대사. 한국어는 태그가 들어간 TTS 대사를 먼저 쓴다. 그 언어 대사가 없으면 undefined */
 export function lineText(line: ScriptLine, language: DialogueLanguage): string | undefined {
-  return language === 'en' ? line.textEn : line.text;
+  return language === 'en' ? line.textEn : line.ttsText ?? line.text;
 }
 
-export function findScriptLine(id: string | undefined): ScriptLine | undefined {
-  return id ? PLATING_SCRIPT.find((l) => l.id === id) : undefined;
+const TAG = /<[^<>]*>/g;
+// 태그가 글자나 문장부호에 붙어 있어도, 띄어 쓰여 있어도 같게 보도록 공백은 모두 빼고 비교한다.
+const withoutSpaces = (s: string) => s.replace(/\s+/g, '');
+
+/** 태그를 뺀 문장이 원래 대사와 같은지(띄어쓰기는 보지 않는다). 다르면 TTS 대사가 대사를 바꾼 것이다. */
+export function ttsTextMatches(text: string, ttsText: string): boolean {
+  return withoutSpaces(ttsText.replace(TAG, '')) === withoutSpaces(text);
+}
+
+export function findScriptLine(lines: ScriptLine[], id: string | undefined): ScriptLine | undefined {
+  return id ? lines.find((l) => l.id === id) : undefined;
 }

@@ -6,6 +6,9 @@ import { GoogleGenAI } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
 import { isWavMime, parsePcmMime, wrapPcm16AsWav } from './src/shared/wav';
 import { LANGUAGES, toLanguage } from './src/shared/language';
+import { NotionScriptSource } from './server/notionScriptSource';
+import { BundledScriptSource } from './src/script/bundledSource';
+import { ScriptSource } from './src/script/source';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -185,6 +188,29 @@ app.post('/api/scenes/ai-generate', async (req, res) => {
     res.status(500).json({
       error: error.message || 'AI 씬 이미지 생성 중 오류가 발생했습니다.',
     });
+  }
+});
+
+// 녹음 대본. NOTION_TOKEN이 있으면 노션 컷표에서 매번 새로 읽고, 없거나 실패하면 저장소 사본을 쓴다.
+const DEFAULT_SCRIPT_PAGE_ID = '3eb339339b9b8007bf8afbdd52102e49';
+const bundledScript = new BundledScriptSource();
+const notionScript: ScriptSource | undefined = process.env.NOTION_TOKEN
+  ? new NotionScriptSource(process.env.NOTION_TOKEN, process.env.NOTION_SCRIPT_PAGE_ID || DEFAULT_SCRIPT_PAGE_ID)
+  : undefined;
+
+app.get('/api/script', async (_req, res) => {
+  if (!notionScript) {
+    const snapshot = await bundledScript.load();
+    snapshot.warnings.push('NOTION_TOKEN이 없어 저장소 사본 대본을 씁니다.');
+    return res.json(snapshot);
+  }
+  try {
+    res.json(await notionScript.load());
+  } catch (error: any) {
+    console.error('Failed to load script from Notion:', error);
+    const snapshot = await bundledScript.load();
+    snapshot.warnings.push(`노션에서 읽지 못해 저장소 사본을 씁니다: ${error.message}`);
+    res.json(snapshot);
   }
 });
 

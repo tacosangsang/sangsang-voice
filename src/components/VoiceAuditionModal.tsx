@@ -30,7 +30,9 @@ function loadChoices(): Partial<Record<SpeakerId, Choice>> {
   try {
     const saved = JSON.parse(localStorage.getItem(CHOICE_KEY) ?? '{}');
     // 예전 저장 형식(목소리 이름만)은 버린다.
-    return Object.fromEntries(Object.entries(saved).filter(([, v]) => typeof v === 'object' && v !== null));
+    return Object.fromEntries(
+      Object.entries(saved as Record<string, unknown>).filter(([, v]) => typeof v === 'object' && v !== null),
+    ) as Partial<Record<SpeakerId, Choice>>;
   } catch {
     return {};
   }
