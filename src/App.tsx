@@ -4,6 +4,7 @@ import { VoiceSelector } from './components/VoiceSelector';
 import { AudioPlayerBar } from './components/AudioPlayerBar';
 import { CustomStudioModal } from './components/CustomStudioModal';
 import { SceneManagerModal } from './components/SceneManagerModal';
+import { VoiceAuditionModal } from './components/VoiceAuditionModal';
 import { DubbingPreset, DubbingItem, SceneItem } from './types';
 import { DEFAULT_SCENES } from './data/defaultScenes';
 import { audioEngine } from './utils/audioEngine';
@@ -16,7 +17,8 @@ import {
   AlertCircle,
   Quote,
   Layers,
-  Plus
+  Plus,
+  Mic2
 } from 'lucide-react';
 
 const DEFAULT_PRESETS: DubbingPreset[] = [
@@ -109,6 +111,7 @@ export default function App() {
   // Modals
   const [isCustomStudioOpen, setIsCustomStudioOpen] = useState<boolean>(false);
   const [isSceneManagerOpen, setIsSceneManagerOpen] = useState<boolean>(false);
+  const [isAuditionOpen, setIsAuditionOpen] = useState<boolean>(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -451,6 +454,14 @@ export default function App() {
               <span>씬 변경 & 추가</span>
             </button>
 
+            <button
+              onClick={() => setIsAuditionOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-200 hover:text-white text-xs font-semibold border border-neutral-700 hover:border-red-500/70 shadow-sm transition-all active:scale-95"
+            >
+              <Mic2 className="w-3.5 h-3.5 text-red-400" />
+              <span>목소리 비교</span>
+            </button>
+
             {/* Custom Dubbing Button */}
             <button
               onClick={() => setIsCustomStudioOpen(true)}
@@ -625,6 +636,8 @@ export default function App() {
         isLoading={isLoading}
         onGenerate={handleCustomGenerate}
       />
+
+      <VoiceAuditionModal isOpen={isAuditionOpen} onClose={() => setIsAuditionOpen(false)} />
 
       {/* Scene Manager Modal */}
       <SceneManagerModal
