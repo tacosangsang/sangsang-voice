@@ -33,7 +33,6 @@ export interface DubbingItem {
   voiceName: string;
   text: string;
   stylePrompt: string;
-  audioBase64: string;
   mimeType: string;
   audioUrl: string;
   duration?: number;

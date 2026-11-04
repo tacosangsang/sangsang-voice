@@ -1,14 +1,14 @@
 // 화자별 목소리 비교. 후보마다 같은 대사·같은 지시문으로 한국어와 영어를 생성해 들어 보고 하나를 고른다.
 // 영어는 대본 줄의 textEn이 있을 때만 생성할 수 있다(영어 대사는 지어 넣지 않는다).
 // 생성 버튼 한 번이 TTS 호출 1회다. 같은 조건으로 이미 만든 음성은 다시 부르지 않고 재생만 한다.
-// 만든 음성과 고른 결과는 이 브라우저에만 저장된다(음성은 IndexedDB, 확정은 localStorage). 결과는 "결과 복사"로 옮겨 적는다.
+// 만든 음성은 recordStore(깃허브 또는 이 브라우저)에, 고른 결과는 이 브라우저 localStorage에 저장된다. 결과는 "결과 복사"로 옮겨 적는다.
 
 import React, { useEffect, useRef, useState } from 'react';
 import { X, Play, Square, Loader2, Check, Copy, Mic2 } from 'lucide-react';
 import { PLATING_SCRIPT, SPEAKERS, SpeakerId, lineText } from '../data/platingScript';
 import { DialogueLanguage, LANGUAGES } from '../shared/language';
 import { GENDER_LABEL, SPEAKER_AUDITIONS, voiceOwner } from '../data/voiceCandidates';
-import { IndexedDbStore, RecordStore } from '../storage/recordStore';
+import { openRecordStore } from '../storage/recordStore';
 
 interface VoiceAuditionModalProps {
   isOpen: boolean;
@@ -16,14 +16,14 @@ interface VoiceAuditionModalProps {
 }
 
 const CHOICE_KEY = 'plating-voice-audition-choices';
-/** 생성 조건을 이은 키(화자|목소리|대본 줄|지시문|언어)와 data URL */
+/** 생성 조건을 이은 키(화자|목소리|대본 줄|지시문|언어)와 음성 주소 */
 interface StoredTake {
   key: string;
   url: string;
   createdAt: number;
 }
 
-const takeStore: RecordStore<StoredTake> = new IndexedDbStore<StoredTake>('takes');
+const takeStore = openRecordStore<StoredTake>('takes', 'key', 'url');
 
 /** 확정한 목소리와 그때의 지시문. 지시문을 고쳐 들어 보고 골랐다면 그 지시문까지가 선택이다. */
 interface Choice {
@@ -64,6 +64,8 @@ export const VoiceAuditionModal: React.FC<VoiceAuditionModalProps> = ({ isOpen, 
   const [callCount, setCallCount] = useState(0);
   const [playingKey, setPlayingKey] = useState<string>();
   const [copied, setCopied] = useState(false);
+  const [storeTarget, setStoreTarget] = useState<string>();
+  const [storeError, setStoreError] = useState<string>();
   const audioRef = useRef<HTMLAudioElement | null>(null);
   // 창을 닫은 뒤 도착한 생성 결과는 저장만 하고 재생하지 않는다.
   const isOpenRef = useRef(isOpen);
@@ -84,16 +86,17 @@ export const VoiceAuditionModal: React.FC<VoiceAuditionModalProps> = ({ isOpen, 
   // 예전에 만든 테이크를 불러온다. 같은 조건으로 다시 누르면 새로 부르지 않고 이것을 재생한다.
   useEffect(() => {
     takeStore
-      .list()
+      .then((store) => {
+        setStoreTarget(store.target);
+        return store.list();
+      })
       .then((stored) =>
         setTakes((prev) => ({
           ...Object.fromEntries(stored.map((t) => [t.key, { url: t.url }])),
           ...prev,
         })),
       )
-      .catch(() => {
-        // 저장소를 못 여는 브라우저(사생활 보호 모드 등)에서는 이번 화면에만 남긴다.
-      });
+      .catch((e) => setStoreError(`저장된 음성을 불러오지 못했습니다: ${e?.message ?? e}`));
   }, []);
 
   if (!isOpen) return null;
@@ -127,7 +130,9 @@ export const VoiceAuditionModal: React.FC<VoiceAuditionModalProps> = ({ isOpen, 
       if (!res.ok) throw new Error(data.error || `생성 실패 (${res.status})`);
       const url = `data:${data.mimeType || 'audio/wav'};base64,${data.audioBase64}`;
       setTakes((prev) => ({ ...prev, [key]: { url } }));
-      takeStore.put({ key, url, createdAt: Date.now() }).catch(() => {});
+      takeStore
+        .then((store) => store.put({ key, url, createdAt: Date.now() }))
+        .catch((e) => setStoreError(`음성 저장 실패(이번 화면에서만 들을 수 있음): ${e?.message ?? e}`));
       if (isOpenRef.current) play(key, url);
     } catch (err: any) {
       setTakes((prev) => ({ ...prev, [key]: { error: err.message || '생성 실패' } }));
@@ -160,7 +165,9 @@ export const VoiceAuditionModal: React.FC<VoiceAuditionModalProps> = ({ isOpen, 
               <h2 className="text-sm font-bold text-white">화자별 목소리 비교</h2>
               <p className="text-[11px] text-neutral-500">
                 생성 버튼 1번 = TTS 호출 1회. 이번에 부른 횟수: {callCount}회
+                {storeTarget && ` · 저장 위치: ${storeTarget}`}
               </p>
+              {storeError && <p className="text-[11px] text-red-400">{storeError}</p>}
             </div>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800">

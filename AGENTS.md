@@ -11,6 +11,7 @@ PLATING(10분 AI 애니메이션)의 대사 녹음본을 Gemini TTS로 만드는
 - `src/script/`: 대본 읽기. `ScriptSource` 인터페이스(`source.ts`)와 저장소 사본(`bundledSource.ts`), 노션 섹션 파서(`notionRecordingScript.ts`, 네트워크 없음), 화면용 훅(`useScript.ts`). 새 출처는 `ScriptSource`를 구현한다.
 - `server/notionScriptSource.ts`: 노션 API로 컷표 페이지 블록을 읽어 파서에 넘긴다. `/api/script`가 `NOTION_TOKEN`이 있으면 매번 노션에서 읽고, 없거나 실패하면 저장소 사본과 경고를 돌려준다.
 - `src/data/platingScript.ts`: 대본 줄 타입, 아는 화자 7명, 노션을 못 읽을 때 쓰는 사본 29줄, 컷 길이 비교 `checkFit`, TTS 대사 검사 `ttsTextMatches`.
+- `src/shared/recording.ts`, `server/githubRecordingRepository.ts`, `src/storage/recordStore.ts`: 생성 음성 저장. 서버 `RecordingRepository`(깃허브 구현)와 브라우저 `RecordStore`(서버 또는 IndexedDB). 다른 저장소는 이 인터페이스를 구현한다.
 - `src/shared/language.ts`: 대사 언어(한국어·영어). 서버가 연기 지시문 끝에 언어 지시를 붙인다. 프리셋 지시문에는 언어를 적지 않는다.
 
 ## PLATING 대본 규칙
@@ -28,7 +29,7 @@ PLATING(10분 AI 애니메이션)의 대사 녹음본을 Gemini TTS로 만드는
 - "효과 포함 WAV"는 잔향 꼬리 2.5초가 붙어 컷 길이보다 길다. 컷 길이 비교는 원본 기준이다.
 - 화자별 기본 목소리·연기 지시문이 정해지지 않았다. 지금 프리셋 4개는 토끼용 시안이다.
 - 기본 씬(`src/data/defaultScenes.ts`)은 대사 있는 8개 씬이고 그림이 아직 없다.
-- 생성 클립과 목소리 비교 테이크는 이 브라우저의 IndexedDB(`src/storage/recordStore.ts`)에 개수 제한 없이 남는다. 다른 기기와는 공유되지 않는다. 커스텀 씬 이미지는 localStorage(용량 약 5MB)에 base64로 저장된다.
+- 생성 클립과 목소리 비교 테이크는 `GITHUB_TOKEN`이 있으면 깃허브 `recordings` 브랜치(`server/githubRecordingRepository.ts`, 저장소별 `index.json` + `<id 해시>.wav`)에, 없으면 그 브라우저 IndexedDB에 남는다(`src/storage/recordStore.ts`). index.json이 1MB를 넘으면 Contents API로 못 읽으니(클립 약 2000개) 그때는 나눠야 한다. 커스텀 씬 이미지는 localStorage(용량 약 5MB)에 base64로 저장된다.
 - 사용 모델 이름(`gemini-3.8-flash-tts` 등)과 응답 오디오 형식은 실제 키로 확인하지 않았다. `sourceMimeType`이 응답에 함께 오니 첫 실행 때 확인한다.
 
 ## 확인

@@ -10,7 +10,7 @@ import { DubbingPreset, DubbingItem, SceneItem } from './types';
 import { DEFAULT_SCENES } from './data/defaultScenes';
 import { audioEngine } from './utils/audioEngine';
 import { DialogueLanguage } from './shared/language';
-import { IndexedDbStore, RecordStore } from './storage/recordStore';
+import { openRecordStore } from './storage/recordStore';
 import {
   Sparkles,
   Film,
@@ -74,10 +74,7 @@ const DEFAULT_PRESETS: DubbingPreset[] = [
   },
 ];
 
-/** 저장할 때는 audioUrl을 빼고 base64만 둔다(같은 음성을 두 번 저장하지 않게). */
-type StoredClip = Omit<DubbingItem, 'audioUrl'>;
-
-const clipStore: RecordStore<StoredClip> = new IndexedDbStore<StoredClip>('clips');
+const clipStore = openRecordStore<DubbingItem>('clips', 'id', 'audioUrl');
 
 export default function App() {
   const { script, isLoading: isScriptLoading, reload: reloadScript } = useScript();
@@ -85,6 +82,7 @@ export default function App() {
   const [activePresetId, setActivePresetId] = useState<string>('charon-elegant');
   const [currentClip, setCurrentClip] = useState<DubbingItem | null>(null);
   const [history, setHistory] = useState<DubbingItem[]>([]);
+  const [clipTarget, setClipTarget] = useState<string>();
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);
@@ -167,22 +165,25 @@ export default function App() {
   // 예전에 만든 클립을 모두 불러온다. 개수 제한 없이 최신순.
   useEffect(() => {
     clipStore
-      .list()
-      .then((stored) => {
-        const restored = stored.map((c) => ({ ...c, audioUrl: `data:${c.mimeType};base64,${c.audioBase64}` }));
+      .then((store) => {
+        setClipTarget(store.target);
+        return store.list();
+      })
+      .then((restored) => {
         setHistory((prev) => {
           const ids = new Set(prev.map((c) => c.id));
           return [...prev, ...restored.filter((c) => !ids.has(c.id))].sort((a, b) => b.createdAt - a.createdAt);
         });
       })
-      .catch((e) => console.warn('저장된 클립을 불러오지 못했습니다', e));
+      .catch((e) => setErrorMsg(`저장된 클립을 불러오지 못했습니다: ${e?.message ?? e}`));
   }, []);
 
   const keepClip = (clip: DubbingItem) => {
     setCurrentClip(clip);
     setHistory((prev) => [clip, ...prev]);
-    const { audioUrl: _url, ...stored } = clip;
-    clipStore.put(stored).catch((e) => setErrorMsg(`클립 저장 실패: ${e?.message ?? e}`));
+    clipStore
+      .then((store) => store.put(clip))
+      .catch((e) => setErrorMsg(`클립 저장 실패(이번 화면에서만 들을 수 있음): ${e?.message ?? e}`));
   };
 
   // Initialize hidden audio element
@@ -312,7 +313,6 @@ export default function App() {
         voiceName: preset.voiceName,
         text: preset.formattedText,
         stylePrompt: preset.stylePrompt,
-        audioBase64: base64,
         mimeType: data.mimeType || 'audio/wav',
         audioUrl,
         createdAt: Date.now(),
@@ -379,7 +379,6 @@ export default function App() {
         stylePrompt: customData.stylePrompt,
         scriptLineId: customData.scriptLineId,
         language: customData.language,
-        audioBase64: data.audioBase64,
         mimeType: data.mimeType || 'audio/wav',
         audioUrl,
         createdAt: Date.now(),
@@ -604,6 +603,7 @@ export default function App() {
               <div className="flex items-center gap-2 text-xs font-semibold text-neutral-300">
                 <History className="w-4 h-4 text-neutral-400" />
                 <span>생성 클립 ({history.length})</span>
+                {clipTarget && <span className="font-normal text-neutral-500">· 저장 위치: {clipTarget}</span>}
               </div>
             </div>
 

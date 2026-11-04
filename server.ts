@@ -9,6 +9,8 @@ import { LANGUAGES, toLanguage } from './src/shared/language';
 import { NotionScriptSource } from './server/notionScriptSource';
 import { BundledScriptSource } from './src/script/bundledSource';
 import { ScriptSource } from './src/script/source';
+import { GitHubRecordingRepository, RecordingRepository } from './server/githubRecordingRepository';
+import { RecordingMeta, RecordingStatus, isRecordingStore } from './src/shared/recording';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -211,6 +213,58 @@ app.get('/api/script', async (_req, res) => {
     const snapshot = await bundledScript.load();
     snapshot.warnings.push(`노션에서 읽지 못해 저장소 사본을 씁니다: ${error.message}`);
     res.json(snapshot);
+  }
+});
+
+// 생성한 음성 저장. GITHUB_TOKEN이 있으면 깃허브 브랜치에, 없으면 브라우저가 스스로 저장한다.
+const recordings: RecordingRepository | undefined = process.env.GITHUB_TOKEN
+  ? new GitHubRecordingRepository(
+      process.env.GITHUB_TOKEN,
+      process.env.GITHUB_RECORDINGS_REPO || 'tacosangsang/sangsang-voice',
+      process.env.GITHUB_RECORDINGS_BRANCH || 'recordings',
+    )
+  : undefined;
+
+app.get('/api/recordings/status', (_req, res) => {
+  const status: RecordingStatus = { enabled: !!recordings, target: recordings?.target };
+  res.json(status);
+});
+
+app.get('/api/recordings/:store', async (req, res) => {
+  const { store } = req.params;
+  if (!recordings || !isRecordingStore(store)) return res.status(404).json({ error: '저장소가 없습니다.' });
+  try {
+    res.json(await recordings.list(store));
+  } catch (error: any) {
+    console.error('Failed to list recordings:', error);
+    res.status(502).json({ error: error.message });
+  }
+});
+
+app.post('/api/recordings/:store', async (req, res) => {
+  const { store } = req.params;
+  if (!recordings || !isRecordingStore(store)) return res.status(404).json({ error: '저장소가 없습니다.' });
+  const { meta, audioBase64 } = req.body as { meta?: RecordingMeta; audioBase64?: string };
+  if (!meta?.id || !audioBase64) return res.status(400).json({ error: 'meta.id와 audioBase64가 필요합니다.' });
+  try {
+    await recordings.save(store, meta, Buffer.from(audioBase64, 'base64'));
+    res.json({ ok: true });
+  } catch (error: any) {
+    console.error('Failed to save recording:', error);
+    res.status(502).json({ error: error.message });
+  }
+});
+
+app.get('/api/recordings/:store/:id/audio', async (req, res) => {
+  const { store, id } = req.params;
+  if (!recordings || !isRecordingStore(store)) return res.status(404).end();
+  try {
+    const audio = await recordings.readAudio(store, id);
+    // 같은 id의 음성은 바뀌지 않는다.
+    res.set({ 'Content-Type': 'audio/wav', 'Cache-Control': 'private, max-age=31536000, immutable' }).send(audio);
+  } catch (error: any) {
+    console.error('Failed to read recording:', error);
+    res.status(502).end();
   }
 });
 
