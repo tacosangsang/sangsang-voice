@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import SceneImage from './SceneImage';
 import {
   Volume2,
   VolumeX,
@@ -145,10 +146,8 @@ export const CinematicViewer: React.FC<CinematicViewerProps> = ({
           isWidescreen ? 'aspect-[2.35/1] max-h-[580px]' : 'aspect-[16/9] max-h-[640px]'
         }`}
       >
-        <img
-          key={scene.imageUrl}
-          src={scene.imageUrl}
-          alt={scene.title}
+        <SceneImage
+          scene={scene}
           className={`w-full h-full object-cover object-center filter transition-all duration-700 ${
             isPlaying ? 'brightness-105 contrast-[1.08] scale-[1.01]' : 'brightness-95 contrast-100'
           }`}
@@ -294,7 +293,7 @@ export const CinematicViewer: React.FC<CinematicViewerProps> = ({
                 }`}
               >
                 <div className="w-8 h-6 rounded overflow-hidden shrink-0 bg-neutral-800">
-                  <img src={s.imageUrl} alt={s.title} className="w-full h-full object-cover" />
+                  <SceneImage scene={s} className="w-full h-full object-cover" />
                 </div>
                 <div className="text-left">
                   <div className="text-[10px] font-mono text-neutral-500 group-hover:text-neutral-400">
