@@ -31,23 +31,27 @@ export const CustomStudioModal: React.FC<CustomStudioModalProps> = ({
 
   const [scriptLineId, setScriptLineId] = useState<string>('');
   const [language, setLanguage] = useState<DialogueLanguage>(DEFAULT_LANGUAGE);
+  // 언어별 입력을 따로 보관해 전환해도 손으로 고친 문장이 지워지지 않게 한다.
+  const [drafts, setDrafts] = useState<Partial<Record<DialogueLanguage, string>>>({});
   const scriptLine = findScriptLine(scriptLineId);
 
   if (!isOpen) return null;
 
-  const fillFromLine = (id: string, lang: DialogueLanguage) => {
-    const line = findScriptLine(id);
-    if (line) setText(lineText(line, lang) ?? '');
-  };
-
   const handlePickLine = (id: string) => {
     setScriptLineId(id);
-    fillFromLine(id, language);
+    setDrafts({});
+    const line = findScriptLine(id);
+    if (line) setText(lineText(line, language) ?? '');
   };
 
   const handlePickLanguage = (lang: DialogueLanguage) => {
+    if (lang === language) return;
+    const next = { ...drafts, [language]: text };
+    setDrafts(next);
     setLanguage(lang);
-    if (scriptLineId) fillFromLine(scriptLineId, lang);
+    const saved = next[lang];
+    if (saved !== undefined) setText(saved);
+    else if (scriptLine) setText(lineText(scriptLine, lang) ?? '');
   };
 
   const missingTranslation = !!scriptLine && !lineText(scriptLine, language);
