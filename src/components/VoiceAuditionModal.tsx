@@ -1,13 +1,14 @@
 // 화자별 목소리 비교. 후보마다 같은 대사·같은 지시문으로 한국어와 영어를 생성해 들어 보고 하나를 고른다.
 // 영어는 대본 줄의 textEn이 있을 때만 생성할 수 있다(영어 대사는 지어 넣지 않는다).
 // 생성 버튼 한 번이 TTS 호출 1회다. 같은 조건으로 이미 만든 음성은 다시 부르지 않고 재생만 한다.
-// 고른 결과는 이 브라우저에만 저장되므로 "결과 복사"로 옮겨 적는다.
+// 만든 음성과 고른 결과는 이 브라우저에만 저장된다(음성은 IndexedDB, 확정은 localStorage). 결과는 "결과 복사"로 옮겨 적는다.
 
 import React, { useEffect, useRef, useState } from 'react';
 import { X, Play, Square, Loader2, Check, Copy, Mic2 } from 'lucide-react';
 import { PLATING_SCRIPT, SPEAKERS, SpeakerId, lineText } from '../data/platingScript';
 import { DialogueLanguage, LANGUAGES } from '../shared/language';
 import { GENDER_LABEL, SPEAKER_AUDITIONS, voiceOwner } from '../data/voiceCandidates';
+import { IndexedDbTakeStore, TakeStore } from '../storage/takeStore';
 
 interface VoiceAuditionModalProps {
   isOpen: boolean;
@@ -15,6 +16,7 @@ interface VoiceAuditionModalProps {
 }
 
 const CHOICE_KEY = 'plating-voice-audition-choices';
+const takeStore: TakeStore = new IndexedDbTakeStore();
 
 /** 확정한 목소리와 그때의 지시문. 지시문을 고쳐 들어 보고 골랐다면 그 지시문까지가 선택이다. */
 interface Choice {
@@ -72,6 +74,21 @@ export const VoiceAuditionModal: React.FC<VoiceAuditionModalProps> = ({ isOpen, 
     if (!isOpen) audioRef.current?.pause();
   }, [isOpen]);
 
+  // 예전에 만든 테이크를 불러온다. 같은 조건으로 다시 누르면 새로 부르지 않고 이것을 재생한다.
+  useEffect(() => {
+    takeStore
+      .list()
+      .then((stored) =>
+        setTakes((prev) => ({
+          ...Object.fromEntries(stored.map((t) => [t.key, { url: t.url }])),
+          ...prev,
+        })),
+      )
+      .catch(() => {
+        // 저장소를 못 여는 브라우저(사생활 보호 모드 등)에서는 이번 화면에만 남긴다.
+      });
+  }, []);
+
   if (!isOpen) return null;
 
   const speakerName = (id: SpeakerId) => SPEAKERS.find((s) => s.id === id)?.name ?? id;
@@ -103,6 +120,7 @@ export const VoiceAuditionModal: React.FC<VoiceAuditionModalProps> = ({ isOpen, 
       if (!res.ok) throw new Error(data.error || `생성 실패 (${res.status})`);
       const url = `data:${data.mimeType || 'audio/wav'};base64,${data.audioBase64}`;
       setTakes((prev) => ({ ...prev, [key]: { url } }));
+      takeStore.put({ key, url, createdAt: Date.now() }).catch(() => {});
       if (isOpenRef.current) play(key, url);
     } catch (err: any) {
       setTakes((prev) => ({ ...prev, [key]: { error: err.message || '생성 실패' } }));
