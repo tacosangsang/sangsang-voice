@@ -1,0 +1,310 @@
+import 'dotenv/config';
+import express from 'express';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { GoogleGenAI } from '@google/genai';
+import { createServer as createViteServer } from 'vite';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const app = express();
+
+const portArgIndex = process.argv.indexOf('--port');
+const parsedArgPort = portArgIndex !== -1 ? parseInt(process.argv[portArgIndex + 1], 10) : NaN;
+// In AI Studio Cloud Run, port 8080 is used by Nginx proxy, which forwards to 3000
+const PORT = !isNaN(parsedArgPort)
+  ? parsedArgPort
+  : Number(process.env.PORT) === 8080
+    ? 3000
+    : Number(process.env.PORT) || 3000;
+
+app.use(express.json({ limit: '10mb' }));
+
+// Lazy GoogleGenAI client to prevent startup warnings when env var is populated dynamically
+function getAiClient() {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error('GEMINI_API_KEY is not configured in the environment.');
+  }
+  return new GoogleGenAI({
+    apiKey,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      },
+    },
+  });
+}
+
+export interface DubbingPreset {
+  id: string;
+  name: string;
+  voiceName: string;
+  badge: string;
+  description: string;
+  stylePrompt: string;
+  formattedText: string;
+  characterDescription: string;
+}
+
+const PRESETS: DubbingPreset[] = [
+  {
+    id: 'charon-elegant',
+    name: '우아한 악마 (Charon)',
+    voiceName: 'Charon',
+    badge: '추천 • 시네마틱',
+    description: '서늘하고 여유로운 신사. 낮고 우아하며 비밀을 속삭이듯 냉정한 어조',
+    stylePrompt:
+      'A sophisticated, chillingly calm, polite yet deeply sinister gentleman in a tailored white suit whispering cynical philosophical truths in Korean with subtle breath pauses and cold elegance.',
+    formattedText: '신은 두 접시 중 하나만 고릅니다. <breath> 다른 하나가 초라하면 더 쉽겠지요.',
+    characterDescription:
+      '하얀 정장을 입고 붉은 눈의 토끼 가면을 쓴 의문의 신사. 요리사의 귀에 다가가 냉소적인 제안을 건네는 순간',
+  },
+  {
+    id: 'fenrir-cynical',
+    name: '비정한 냉혈한 (Fenrir)',
+    voiceName: 'Fenrir',
+    badge: '다크 • 묵직함',
+    description: '극도로 가라앉은 저음, 감정이 배제된 채 압박해오는 차가운 위압감',
+    stylePrompt:
+      'Deep, raspy, heavy, and cynical male voice, emotionally detached, dark psychological pressure with an unyielding cold cadence.',
+    formattedText: '신은 두 접시 중 하나만 고릅니다. 다른 하나가 초라하면, 더 쉽겠지요.',
+    characterDescription:
+      '요리사의 고뇌를 꿰뚫어 보며 선택의 잔인함을 차갑게 각인시키는 어두운 조언자',
+  },
+  {
+    id: 'puck-eccentric',
+    name: '기괴한 조소 (Puck)',
+    voiceName: 'Puck',
+    badge: '그로테스크 • 광기',
+    description: '가면 뒤에서 번지는 옅은 조소와 비틀린 유머, 신경질적인 광기',
+    stylePrompt:
+      'Eccentric, slightly playful yet deeply eerie and twisted voice with a sarcastic sneer, unsettlingly casual about cruel fate.',
+    formattedText: '신은 두 접시 중 하나만 고릅니다. <laugh> 다른 하나가 초라하면... 더 쉽겠지요?',
+    characterDescription:
+      '붉은 유리 눈알 뒤에서 비웃음을 머금고 세상의 비정함을 즐기듯 속삭이는 가면의 남자',
+  },
+  {
+    id: 'zephyr-whisper',
+    name: '스산한 환영 (Zephyr)',
+    voiceName: 'Zephyr',
+    badge: '미스터리 • 에코',
+    description: '꿈결처럼 귓가를 맴돌며 유혹하는 나직하고 몽환적인 음성',
+    stylePrompt:
+      'Ethereal, haunting whisper, calm and smooth yet spine-chilling, delivered close to the microphone as if speaking into someone’s ear.',
+    formattedText: '신은 두 접시 중 하나만 고릅니다... 다른 하나가 초라하면, 더 쉽겠지요.',
+    characterDescription:
+      '피할 수 없는 악마의 속삭임처럼 요리사의 귓가에 맴도는 유혹과 파멸의 계시',
+  },
+];
+
+// Presets API
+app.get('/api/dubbing/presets', (_req, res) => {
+  res.json({ presets: PRESETS });
+});
+
+// AI Scene Generation API
+app.post('/api/scenes/ai-generate', async (req, res) => {
+  try {
+    const { prompt } = req.body;
+    if (!prompt || typeof prompt !== 'string') {
+      return res.status(400).json({ error: '생성할 씬에 대한 프롬프트를 입력해주세요.' });
+    }
+
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(500).json({ error: 'GEMINI_API_KEY가 설정되지 않았습니다.' });
+    }
+
+    const ai = getAiClient();
+    const enhancedPrompt = `Dark cinematic stop-motion claymation movie still, miniature clay puppet set, moody chiaroscuro lighting, eerie gothic thriller atmosphere: ${prompt.trim()}`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.1-flash-lite-image',
+      contents: {
+        parts: [
+          {
+            text: enhancedPrompt,
+          },
+        ],
+      },
+    });
+
+    let generatedImageUrl: string | undefined;
+
+    for (const part of response.candidates?.[0]?.content?.parts ?? []) {
+      if (part.inlineData?.data) {
+        const mime = part.inlineData.mimeType || 'image/png';
+        generatedImageUrl = `data:${mime};base64,${part.inlineData.data}`;
+        break;
+      }
+    }
+
+    if (!generatedImageUrl) {
+      return res.status(502).json({
+        error: '이미지가 생성되지 않았습니다. 다른 프롬프트로 시도해보세요.',
+      });
+    }
+
+    res.json({
+      imageUrl: generatedImageUrl,
+      prompt: prompt.trim(),
+    });
+  } catch (error: any) {
+    console.error('Error generating scene image:', error);
+    res.status(500).json({
+      error: error.message || 'AI 씬 이미지 생성 중 오류가 발생했습니다.',
+    });
+  }
+});
+
+// Generate TTS Dubbing
+app.post('/api/dubbing/generate', async (req, res) => {
+  try {
+    const {
+      text = '신은 두 접시 중 하나만 고릅니다. 다른 하나가 초라하면 더 쉽겠지요.',
+      voiceName = 'Charon',
+      stylePrompt = 'A chilling, calm, sophisticated and cynical Korean voice with subtle breath',
+      modelPreference = 'gemini-3.8-flash-tts',
+    } = req.body;
+
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(500).json({
+        error: 'GEMINI_API_KEY is not configured in the environment.',
+      });
+    }
+
+    const ai = getAiClient();
+    const cleanText = text.trim();
+    const primaryModel =
+      modelPreference === 'gemini-3.8-flash-lite-tts'
+        ? 'gemini-3.8-flash-lite-tts'
+        : 'gemini-3.8-flash-tts';
+
+    let base64Audio: string | undefined;
+    let usedModel = primaryModel;
+
+    try {
+      const response = await ai.models.generateContent({
+        model: primaryModel,
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              {
+                text: cleanText,
+                speechMetadata: {
+                  style: stylePrompt,
+                },
+              },
+            ],
+          },
+        ],
+        config: {
+          responseModalities: ['AUDIO'],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName },
+            },
+          },
+        },
+      });
+
+      base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    } catch (err: any) {
+      console.warn(
+        `Primary TTS (${primaryModel}) failed, attempting fallback to gemini-3.8-flash-lite-tts:`,
+        err.message
+      );
+      // Fallback attempt
+      if (primaryModel !== 'gemini-3.8-flash-lite-tts') {
+        usedModel = 'gemini-3.8-flash-lite-tts';
+        const fallbackResponse = await ai.models.generateContent({
+          model: 'gemini-3.8-flash-lite-tts',
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                {
+                  text: cleanText.replace(/<[^>]+>/g, ''), // strip vocal tags if lite
+                  speechMetadata: {
+                    style: stylePrompt,
+                  },
+                },
+              ],
+            },
+          ],
+          config: {
+            responseModalities: ['AUDIO'],
+            speechConfig: {
+              voiceConfig: {
+                prebuiltVoiceConfig: { voiceName },
+              },
+            },
+          },
+        });
+        base64Audio = fallbackResponse.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      } else {
+        throw err;
+      }
+    }
+
+    if (!base64Audio) {
+      return res.status(502).json({
+        error: '음성 생성 응답에 오디오 데이터가 포함되지 않았습니다.',
+      });
+    }
+
+    res.json({
+      audioBase64: base64Audio,
+      mimeType: 'audio/wav',
+      voiceName,
+      usedModel,
+      text: cleanText,
+      timestamp: Date.now(),
+    });
+  } catch (error: any) {
+    console.error('Error generating speech dubbing:', error);
+    res.status(500).json({
+      error: error.message || '음성 더빙 생성 중 오류가 발생했습니다.',
+    });
+  }
+});
+
+// Mount Vite or static server
+async function startServer() {
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  if (isProduction) {
+    app.use(express.static(path.resolve(__dirname, 'dist')));
+    app.get('*', (_req, res) => {
+      res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
+    });
+  } else {
+    const vite = await createViteServer({
+      server: {
+        middlewareMode: true,
+        hmr: false,
+      },
+      appType: 'spa',
+    });
+    app.use(vite.middlewares);
+  }
+
+  const server = app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server listening on http://0.0.0.0:${PORT}`);
+    console.log(`  ➜  Local:   http://localhost:${PORT}/`);
+  });
+
+  server.on('error', (err: any) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`Port ${PORT} is already in use.`);
+    } else {
+      console.error('Server encountered error:', err);
+    }
+  });
+}
+
+startServer().catch((err) => {
+  console.error('Failed to start server:', err);
+});

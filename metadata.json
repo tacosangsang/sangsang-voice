@@ -1,0 +1,8 @@
+{
+  "name": "Remix Bunny Voice Dub",
+  "description": "Dub your voice over the mysterious bunny-masked character for a tense, cinematic atmosphere.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
