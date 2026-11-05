@@ -30,6 +30,8 @@ export interface ScriptLine {
   ttsText?: string;
   /** 노션 "연기 지시" 칸: 이 줄만의 디렉션. 화자 프리셋 지시문 뒤에 붙는다. */
   direction?: string;
+  /** 노션 "감정" 칸: 짧은 감정 이름. 같은 씬·같은 화자·같은 감정이 이어지는 줄만 TTS 한 번으로 묶어 뽑는다. */
+  mood?: string;
 }
 
 export const SPEAKERS: Speaker[] = [

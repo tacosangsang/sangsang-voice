@@ -214,8 +214,13 @@ export const CustomStudioModal: React.FC<CustomStudioModalProps> = ({
           {mode === 'group' && (
             <div className="space-y-2">
               <label htmlFor="plating-group" className="text-xs font-semibold text-neutral-300">
-                묶음 (같은 씬에서 같은 화자가 이어 말하는 줄)
+                묶음 (같은 씬·같은 화자·같은 감정으로 이어지는 줄)
               </label>
+              {groups.length === 0 && (
+                <p className="text-[11px] text-amber-400">
+                  묶을 줄이 없습니다. 노션 녹음 대본 표의 "감정" 칸이 채워져야 묶음이 생깁니다.
+                </p>
+              )}
               <select
                 id="plating-group"
                 value={groupId}

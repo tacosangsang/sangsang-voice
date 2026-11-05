@@ -1,6 +1,6 @@
 // 노션 컷표 페이지의 "녹음 대본 (인물별 대사)" 섹션을 대본 줄로 바꾼다.
 // 섹션 모양: 제목(heading) 아래에 "굵은 글씨 한 줄 = 화자 이름" 다음 표가 온다.
-// 표 머리 줄의 칸 이름(컷, TC, 길이, 대사, 상황, 영어 대사, TTS 대사, 연기 지시)으로 칸을 찾으므로 칸 순서가 바뀌어도 된다.
+// 표 머리 줄의 칸 이름(컷, TC, 길이, 대사, 상황, 영어 대사, TTS 대사, 연기 지시, 감정)으로 칸을 찾으므로 칸 순서가 바뀌어도 된다.
 // 이 파일은 노션 응답 모양만 알고 네트워크는 모른다(서버의 NotionScriptSource가 블록을 가져온다).
 
 import { SPEAKERS, ScriptLine, Speaker, ttsTextMatches } from '../data/platingScript';
@@ -29,7 +29,7 @@ export interface NotionBlock {
 
 const HEADING_TYPES = ['heading_1', 'heading_2', 'heading_3'] as const;
 
-type Column = 'cut' | 'tc' | 'length' | 'text' | 'textEn' | 'situation' | 'ttsText' | 'direction';
+type Column = 'cut' | 'tc' | 'length' | 'text' | 'textEn' | 'situation' | 'ttsText' | 'direction' | 'mood';
 
 const COLUMN_NAMES: Record<Column, string[]> = {
   cut: ['컷'],
@@ -40,6 +40,7 @@ const COLUMN_NAMES: Record<Column, string[]> = {
   situation: ['상황'],
   ttsText: ['TTS 대사'],
   direction: ['연기 지시'],
+  mood: ['감정'],
 };
 
 function plain(rich: NotionRichText[] | undefined): string {
@@ -163,6 +164,7 @@ export function parseRecordingScript(pageBlocks: NotionBlock[]): ParsedRecording
         situation: cell('situation'),
         ttsText,
         direction: cell('direction') || undefined,
+        mood: cell('mood') || undefined,
       });
     }
   }
