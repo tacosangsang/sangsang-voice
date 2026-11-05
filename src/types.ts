@@ -38,6 +38,8 @@ export interface DubbingItem {
   duration?: number;
   /** PLATING 대본 줄(컷 번호). 컷 길이 비교와 파일 이름에 쓴다. */
   scriptLineId?: string;
+  /** 목소리 비교로 만든 음성의 생성 조건 키. 같은 조건이면 다시 부르지 않고 이 음성을 쓴다. */
+  auditionKey?: string;
   language?: DialogueLanguage;
   createdAt: number;
 }

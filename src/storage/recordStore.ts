@@ -25,8 +25,11 @@ type StringKey<T> = { [K in keyof T]: T[K] extends string ? K : never }[keyof T]
 const DB_NAME = 'sangsang-voice';
 const DB_VERSION = 2;
 
+/** 브라우저 저장소 이름. takes는 예전 목소리 비교 저장 형식이라 읽기(옮기기)만 한다. */
+export type LocalStoreName = RecordingStoreName | 'takes';
+
 /** 저장소별 키 칸. 저장소를 늘리면 여기에 적고 DB_VERSION을 올린다. */
-const KEY_PATHS: Record<RecordingStoreName, string> = { takes: 'key', clips: 'id' };
+const KEY_PATHS: Record<LocalStoreName, string> = { takes: 'key', clips: 'id' };
 
 let db: Promise<IDBDatabase> | undefined;
 
@@ -47,7 +50,7 @@ function openDb(): Promise<IDBDatabase> {
 export class IndexedDbStore<T> implements RecordStore<T> {
   readonly target = '이 브라우저';
 
-  constructor(private readonly store: RecordingStoreName) {}
+  constructor(private readonly store: LocalStoreName) {}
 
   async list(): Promise<T[]> {
     const conn = await openDb();

@@ -1,29 +1,25 @@
 // 화자별 목소리 비교. 후보마다 같은 대사·같은 지시문으로 한국어와 영어를 생성해 들어 보고 하나를 고른다.
 // 영어는 대본 줄의 textEn이 있을 때만 생성할 수 있다(영어 대사는 지어 넣지 않는다).
 // 생성 버튼 한 번이 TTS 호출 1회다. 같은 조건으로 이미 만든 음성은 다시 부르지 않고 재생만 한다.
-// 만든 음성은 recordStore(깃허브 또는 이 브라우저)에, 고른 결과는 이 브라우저 localStorage에 저장된다. 결과는 "결과 복사"로 옮겨 적는다.
+// 만든 음성은 메인 생성 클립 목록에 함께 저장된다(깃허브 또는 이 브라우저). 고른 결과는 이 브라우저 localStorage에 저장되고 "결과 복사"로 옮겨 적는다.
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { X, Play, Square, Loader2, Check, Copy, Mic2 } from 'lucide-react';
 import { PLATING_SCRIPT, SPEAKERS, SpeakerId, lineText } from '../data/platingScript';
 import { DialogueLanguage, LANGUAGES } from '../shared/language';
 import { GENDER_LABEL, SPEAKER_AUDITIONS, voiceOwner } from '../data/voiceCandidates';
-import { openRecordStore } from '../storage/recordStore';
+import { AuditionTake, auditionClip, auditionKey } from '../data/auditionClip';
+import { DubbingItem } from '../types';
 
 interface VoiceAuditionModalProps {
   isOpen: boolean;
   onClose: () => void;
+  /** 메인 생성 클립 전체. 이 중 목소리 비교로 만든 것(auditionKey)을 다시 재생한다. */
+  clips: DubbingItem[];
+  onClipCreated: (clip: DubbingItem) => void;
 }
 
 const CHOICE_KEY = 'plating-voice-audition-choices';
-/** 생성 조건을 이은 키(화자|목소리|대본 줄|지시문|언어)와 음성 주소 */
-interface StoredTake {
-  key: string;
-  url: string;
-  createdAt: number;
-}
-
-const takeStore = openRecordStore<StoredTake>('takes', 'key', 'url');
 
 /** 확정한 목소리와 그때의 지시문. 지시문을 고쳐 들어 보고 골랐다면 그 지시문까지가 선택이다. */
 interface Choice {
@@ -31,8 +27,8 @@ interface Choice {
   style: string;
 }
 
-interface Take {
-  url?: string;
+/** 생성 중이거나 실패한 테이크. 만든 음성은 clips에 있다. */
+interface PendingTake {
   error?: string;
   loading?: boolean;
 }
@@ -53,19 +49,21 @@ function loadChoices(): Partial<Record<SpeakerId, Choice>> {
   }
 }
 
-export const VoiceAuditionModal: React.FC<VoiceAuditionModalProps> = ({ isOpen, onClose }) => {
+export const VoiceAuditionModal: React.FC<VoiceAuditionModalProps> = ({ isOpen, onClose, clips, onClipCreated }) => {
   const [lineBySpeaker, setLineBySpeaker] = useState<Partial<Record<SpeakerId, string>>>({});
   const [choices, setChoices] = useState(loadChoices);
   const [styleBySpeaker, setStyleBySpeaker] = useState<Partial<Record<SpeakerId, string>>>(() =>
     Object.fromEntries(Object.entries(choices).map(([id, c]) => [id, c!.style])),
   );
-  // 키: 화자|목소리|대본 줄|지시문. 조건이 하나라도 바뀌면 새로 생성한다.
-  const [takes, setTakes] = useState<Record<string, Take>>({});
+  // 키: 화자|목소리|대본 줄|지시문|언어. 조건이 하나라도 바뀌면 새로 생성하고, 같으면 저장된 음성을 재생한다.
+  const [pending, setPending] = useState<Record<string, PendingTake>>({});
+  const takeUrls = useMemo(
+    () => new Map(clips.filter((c) => c.auditionKey).map((c) => [c.auditionKey!, c.audioUrl])),
+    [clips],
+  );
   const [callCount, setCallCount] = useState(0);
   const [playingKey, setPlayingKey] = useState<string>();
   const [copied, setCopied] = useState(false);
-  const [storeTarget, setStoreTarget] = useState<string>();
-  const [storeError, setStoreError] = useState<string>();
   const audioRef = useRef<HTMLAudioElement | null>(null);
   // 창을 닫은 뒤 도착한 생성 결과는 저장만 하고 재생하지 않는다.
   const isOpenRef = useRef(isOpen);
@@ -83,21 +81,12 @@ export const VoiceAuditionModal: React.FC<VoiceAuditionModalProps> = ({ isOpen, 
     if (!isOpen) audioRef.current?.pause();
   }, [isOpen]);
 
-  // 예전에 만든 테이크를 불러온다. 같은 조건으로 다시 누르면 새로 부르지 않고 이것을 재생한다.
   useEffect(() => {
-    takeStore
-      .then((store) => {
-        setStoreTarget(store.target);
-        return store.list();
-      })
-      .then((stored) =>
-        setTakes((prev) => ({
-          ...Object.fromEntries(stored.map((t) => [t.key, { url: t.url }])),
-          ...prev,
-        })),
-      )
-      .catch((e) => setStoreError(`저장된 음성을 불러오지 못했습니다: ${e?.message ?? e}`));
-  }, []);
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -117,8 +106,10 @@ export const VoiceAuditionModal: React.FC<VoiceAuditionModalProps> = ({ isOpen, 
     setPlayingKey(undefined);
   };
 
-  const generate = async (key: string, text: string, voiceName: string, stylePrompt: string, language: DialogueLanguage) => {
-    setTakes((prev) => ({ ...prev, [key]: { loading: true } }));
+  const generate = async (take: AuditionTake, text: string) => {
+    const key = auditionKey(take);
+    const { voiceName, style: stylePrompt, language } = take;
+    setPending((prev) => ({ ...prev, [key]: { loading: true } }));
     setCallCount((n) => n + 1);
     try {
       const res = await fetch('/api/dubbing/generate', {
@@ -129,13 +120,11 @@ export const VoiceAuditionModal: React.FC<VoiceAuditionModalProps> = ({ isOpen, 
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || `생성 실패 (${res.status})`);
       const url = `data:${data.mimeType || 'audio/wav'};base64,${data.audioBase64}`;
-      setTakes((prev) => ({ ...prev, [key]: { url } }));
-      takeStore
-        .then((store) => store.put({ key, url, createdAt: Date.now() }))
-        .catch((e) => setStoreError(`음성 저장 실패(이번 화면에서만 들을 수 있음): ${e?.message ?? e}`));
+      onClipCreated(auditionClip(take, text, url, Date.now()));
+      setPending((prev) => ({ ...prev, [key]: {} }));
       if (isOpenRef.current) play(key, url);
     } catch (err: any) {
-      setTakes((prev) => ({ ...prev, [key]: { error: err.message || '생성 실패' } }));
+      setPending((prev) => ({ ...prev, [key]: { error: err.message || '생성 실패' } }));
     }
   };
 
@@ -156,7 +145,10 @@ export const VoiceAuditionModal: React.FC<VoiceAuditionModalProps> = ({ isOpen, 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
       <div className="relative w-full max-w-3xl max-h-[90vh] flex flex-col rounded-2xl bg-neutral-900 border border-neutral-800 shadow-2xl overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-800 bg-neutral-950/60">
           <div className="flex items-center gap-2.5">
@@ -165,13 +157,16 @@ export const VoiceAuditionModal: React.FC<VoiceAuditionModalProps> = ({ isOpen, 
               <h2 className="text-sm font-bold text-white">화자별 목소리 비교</h2>
               <p className="text-[11px] text-neutral-500">
                 생성 버튼 1번 = TTS 호출 1회. 이번에 부른 횟수: {callCount}회
-                {storeTarget && ` · 저장 위치: ${storeTarget}`}
+                {' '}· 만든 음성은 메인 "생성 클립"에도 저장됩니다.
               </p>
-              {storeError && <p className="text-[11px] text-red-400">{storeError}</p>}
             </div>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800">
+          <button
+            onClick={onClose}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-neutral-700 text-xs font-semibold text-neutral-200 hover:text-white hover:bg-neutral-800"
+          >
             <X className="w-4 h-4" />
+            메인으로
           </button>
         </div>
 
@@ -231,14 +226,16 @@ export const VoiceAuditionModal: React.FC<VoiceAuditionModalProps> = ({ isOpen, 
                         </div>
                         {(Object.keys(LANGUAGES) as DialogueLanguage[]).map((lang) => {
                           // 같은 목소리로 한국어와 영어를 나란히 들어 비교한다. 키에 언어가 들어가 따로 보관된다.
-                          const key = `${a.speaker}|${c.voiceName}|${line.id}|${style}|${lang}`;
-                          const take = takes[key];
+                          const take: AuditionTake = { speaker: a.speaker, voiceName: c.voiceName, lineId: line.id, style, language: lang };
+                          const key = auditionKey(take);
+                          const url = takeUrls.get(key);
+                          const state = pending[key];
                           const text = lineText(line, lang);
                           return (
                             <div key={lang} className="space-y-1">
-                              {take?.url ? (
+                              {url ? (
                                 <button
-                                  onClick={() => (playingKey === key ? stop() : play(key, take.url!))}
+                                  onClick={() => (playingKey === key ? stop() : play(key, url))}
                                   className="w-full flex items-center justify-center gap-1 rounded-md bg-neutral-800 hover:bg-neutral-700 py-1.5 text-[11px] text-white"
                                 >
                                   {playingKey === key ? <Square className="w-3 h-3" /> : <Play className="w-3 h-3" />}
@@ -246,15 +243,15 @@ export const VoiceAuditionModal: React.FC<VoiceAuditionModalProps> = ({ isOpen, 
                                 </button>
                               ) : (
                                 <button
-                                  onClick={() => text && generate(key, text, c.voiceName, style, lang)}
-                                  disabled={!text || take?.loading}
+                                  onClick={() => text && generate(take, text)}
+                                  disabled={!text || state?.loading}
                                   className="w-full flex items-center justify-center gap-1 rounded-md bg-red-700 hover:bg-red-600 disabled:bg-neutral-800 disabled:text-neutral-500 py-1.5 text-[11px] text-white"
                                 >
-                                  {take?.loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
-                                  {LANGUAGES[lang].label} {take?.loading ? '생성 중' : text ? '생성' : '대사 없음'}
+                                  {state?.loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
+                                  {LANGUAGES[lang].label} {state?.loading ? '생성 중' : text ? '생성' : '대사 없음'}
                                 </button>
                               )}
-                              {take?.error && <p className="text-[10px] text-red-400 break-words">{take.error}</p>}
+                              {state?.error && <p className="text-[10px] text-red-400 break-words">{state.error}</p>}
                             </div>
                           );
                         })}

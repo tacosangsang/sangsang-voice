@@ -1,7 +1,7 @@
 // 서버·브라우저가 함께 쓰는 녹음 저장 약속.
 
-/** 저장소 이름. 목소리 비교 테이크(takes)와 메인 생성 클립(clips). */
-export const RECORDING_STORES = ['takes', 'clips'] as const;
+/** 서버 저장소 이름. 생성 클립(clips)에 목소리 비교 음성도 함께 둔다. */
+export const RECORDING_STORES = ['clips'] as const;
 export type RecordingStoreName = (typeof RECORDING_STORES)[number];
 
 export function isRecordingStore(name: string): name is RecordingStoreName {

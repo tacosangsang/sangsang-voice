@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { X, Sparkles, Mic, Volume2, Wand2, Plus, RefreshCw } from 'lucide-react';
 import { findScriptLine, lineText } from '../data/platingScript';
 import { ScriptSnapshot } from '../script/source';
+import { ScriptLineGroup, groupConsecutiveLines } from '../script/lineGroups';
 import { DialogueLanguage, LANGUAGES, DEFAULT_LANGUAGE } from '../shared/language';
 
 interface CustomStudioModalProps {
@@ -16,6 +17,13 @@ interface CustomStudioModalProps {
     scriptLineId?: string;
     language: DialogueLanguage;
   }) => Promise<void>;
+  /** 묶음 하나를 TTS 한 번으로 뽑아 줄마다 자른다 */
+  onGenerateBatch: (data: {
+    group: ScriptLineGroup;
+    voiceName: string;
+    stylePrompt: string;
+    language: DialogueLanguage;
+  }) => Promise<void>;
   script: ScriptSnapshot;
   isScriptLoading: boolean;
   onReloadScript: () => void;
@@ -26,6 +34,7 @@ export const CustomStudioModal: React.FC<CustomStudioModalProps> = ({
   onClose,
   isLoading,
   onGenerate,
+  onGenerateBatch,
   script,
   isScriptLoading,
   onReloadScript,
@@ -43,6 +52,16 @@ export const CustomStudioModal: React.FC<CustomStudioModalProps> = ({
   // 줄마다 노션 "연기 지시" 칸을 불러와 고칠 수 있게 하고, 생성 때 지시문 뒤에 붙인다.
   const [lineDirection, setLineDirection] = useState('');
   const scriptLine = findScriptLine(script.lines, scriptLineId);
+  // 한 줄씩 / 묶음(같은 씬에서 같은 화자가 이어 말하는 줄)
+  const [mode, setMode] = useState<'line' | 'group'>('line');
+  const groups = useMemo(
+    () => groupConsecutiveLines(script.lines).filter((g) => g.lines.length > 1),
+    [script.lines],
+  );
+  const [groupId, setGroupId] = useState('');
+  const group = groups.find((g) => g.id === groupId);
+  const groupTexts = group?.lines.map((l) => lineText(l, language));
+  const groupReady = !!groupTexts && groupTexts.every(Boolean);
 
   if (!isOpen) return null;
 
@@ -95,7 +114,14 @@ export const CustomStudioModal: React.FC<CustomStudioModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!text.trim() || isLoading) return;
+    if (isLoading) return;
+    if (mode === 'group') {
+      if (!group || !groupReady) return;
+      await onGenerateBatch({ group, voiceName, stylePrompt, language });
+      onClose();
+      return;
+    }
+    if (!text.trim()) return;
 
     await onGenerate({
       text: text.trim(),
@@ -157,7 +183,71 @@ export const CustomStudioModal: React.FC<CustomStudioModalProps> = ({
             </div>
           </div>
 
+          {/* 한 줄씩 / 묶음 */}
+          <div className="space-y-2">
+            <span className="text-xs font-semibold text-neutral-300">생성 방식</span>
+            <div className="flex gap-2" role="radiogroup" aria-label="생성 방식">
+              {(
+                [
+                  ['line', '한 줄씩'],
+                  ['group', '묶음 (호출 1번에 여러 줄)'],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="radio"
+                  aria-checked={mode === id}
+                  onClick={() => setMode(id)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                    mode === id
+                      ? 'bg-red-950/40 border-red-500 text-white'
+                      : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-neutral-200'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {mode === 'group' && (
+            <div className="space-y-2">
+              <label htmlFor="plating-group" className="text-xs font-semibold text-neutral-300">
+                묶음 (같은 씬에서 같은 화자가 이어 말하는 줄)
+              </label>
+              <select
+                id="plating-group"
+                value={groupId}
+                onChange={(e) => setGroupId(e.target.value)}
+                className="w-full rounded-xl bg-neutral-950 border border-neutral-800 p-2.5 text-xs text-neutral-200 focus:outline-none focus:border-red-500/80"
+              >
+                <option value="">묶음 고르기</option>
+                {groups.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.scene} {script.speakers.find((s) => s.id === g.speaker)?.name ?? g.speaker} · {g.lines.length}줄 (
+                    {g.lines.map((l) => l.cut.replace(`${g.scene}-`, '')).join(', ')})
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11px] text-neutral-500 leading-relaxed">
+                TTS 호출 1번으로 {group ? group.lines.length : '여러'}줄을 뽑고, 줄 사이 무음에서 잘라 컷마다 저장합니다. 자르기에
+                실패하면 통째로 저장합니다. 줄마다 연기 지시는 노션 칸 그대로 함께 보냅니다.
+              </p>
+              {group && (
+                <ol className="space-y-1 text-[11px] text-neutral-300 list-decimal pl-5">
+                  {group.lines.map((l, i) => (
+                    <li key={l.id}>
+                      <span className="font-mono text-neutral-500">{l.cut}</span> {groupTexts?.[i] ?? <span className="text-amber-400">이 언어 대사 없음</span>}
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
+          )}
+
           {/* PLATING 대본 줄 선택 */}
+          {mode === 'line' && (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <label htmlFor="plating-line" className="text-xs font-semibold text-neutral-300">
@@ -223,7 +313,10 @@ export const CustomStudioModal: React.FC<CustomStudioModalProps> = ({
             )}
           </div>
 
+          )}
+
           {/* Script Text Input */}
+          {mode === 'line' && (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <label className="text-xs font-semibold text-neutral-300">
@@ -267,6 +360,7 @@ export const CustomStudioModal: React.FC<CustomStudioModalProps> = ({
               placeholder="대사를 입력하세요..."
             />
           </div>
+          )}
 
           {/* Voice Actor Selection */}
           <div className="space-y-2">
@@ -343,7 +437,7 @@ export const CustomStudioModal: React.FC<CustomStudioModalProps> = ({
             </button>
             <button
               type="submit"
-              disabled={isLoading || !text.trim()}
+              disabled={isLoading || (mode === 'group' ? !groupReady : !text.trim())}
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-xs font-bold shadow-lg shadow-red-900/30 transition-all active:scale-95"
             >
               {isLoading ? (
@@ -354,7 +448,7 @@ export const CustomStudioModal: React.FC<CustomStudioModalProps> = ({
               ) : (
                 <>
                   <Wand2 className="w-4 h-4" />
-                  <span>새로운 분위기로 더빙하기</span>
+                  <span>{mode === 'group' ? '묶음 생성 (호출 1번)' : '새로운 분위기로 더빙하기'}</span>
                 </>
               )}
             </button>

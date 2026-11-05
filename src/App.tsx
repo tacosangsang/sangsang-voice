@@ -10,7 +10,11 @@ import { DubbingPreset, DubbingItem, SceneItem } from './types';
 import { DEFAULT_SCENES } from './data/defaultScenes';
 import { audioEngine } from './utils/audioEngine';
 import { DialogueLanguage } from './shared/language';
-import { openRecordStore } from './storage/recordStore';
+import { IndexedDbStore, openRecordStore } from './storage/recordStore';
+import { LegacyTake, clipFromLegacyTake } from './data/auditionClip';
+import { ScriptLineGroup } from './script/lineGroups';
+import { SilenceTakeSplitter, TakeSplitter } from './audio/takeSplitter';
+import { lineText } from './data/platingScript';
 import {
   Sparkles,
   Film,
@@ -75,6 +79,12 @@ const DEFAULT_PRESETS: DubbingPreset[] = [
 ];
 
 const clipStore = openRecordStore<DubbingItem>('clips', 'id', 'audioUrl');
+
+const takeSplitter: TakeSplitter = new SilenceTakeSplitter();
+
+/** 묶음 생성 때 지시문 뒤에 붙인다. 줄 사이 쉼이 있어야 무음으로 자를 수 있다. */
+const BATCH_INSTRUCTION =
+  'These are separate lines read one after another. Leave a clear silence of about one second between lines.';
 
 export default function App() {
   const { script, isLoading: isScriptLoading, reload: reloadScript } = useScript();
@@ -169,21 +179,35 @@ export default function App() {
         setClipTarget(store.target);
         return store.list();
       })
-      .then((restored) => {
+      .then(async (restored) => {
+        // 예전에 목소리 비교 음성만 따로 브라우저에 두던 것(takes)을 생성 클립으로 옮긴다. 같은 id라 여러 번 돌아도 하나다.
+        const ids = new Set(restored.map((c) => c.id));
+        const legacy = await new IndexedDbStore<LegacyTake>('takes').list().catch(() => []);
+        const moved = legacy.map(clipFromLegacyTake).filter((c): c is DubbingItem => !!c && !ids.has(c.id));
         setHistory((prev) => {
-          const ids = new Set(prev.map((c) => c.id));
-          return [...prev, ...restored.filter((c) => !ids.has(c.id))].sort((a, b) => b.createdAt - a.createdAt);
+          const seen = new Set(prev.map((c) => c.id));
+          const loaded = [...restored, ...moved].filter((c) => !seen.has(c.id));
+          return [...prev, ...loaded].sort((a, b) => b.createdAt - a.createdAt);
         });
+        moved.forEach(saveClip);
       })
       .catch((e) => setErrorMsg(`저장된 클립을 불러오지 못했습니다: ${e?.message ?? e}`));
   }, []);
 
-  const keepClip = (clip: DubbingItem) => {
-    setCurrentClip(clip);
-    setHistory((prev) => [clip, ...prev]);
+  const saveClip = (clip: DubbingItem) => {
     clipStore
       .then((store) => store.put(clip))
       .catch((e) => setErrorMsg(`클립 저장 실패(이번 화면에서만 들을 수 있음): ${e?.message ?? e}`));
+  };
+
+  const addClip = (clip: DubbingItem) => {
+    setHistory((prev) => [clip, ...prev.filter((c) => c.id !== clip.id)]);
+    saveClip(clip);
+  };
+
+  const keepClip = (clip: DubbingItem) => {
+    setCurrentClip(clip);
+    addClip(clip);
   };
 
   // Initialize hidden audio element
@@ -396,6 +420,87 @@ export default function App() {
       }
     } catch (err: any) {
       setErrorMsg(err.message || '커스텀 더빙 생성 중 문제가 발생했습니다.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 같은 씬·같은 화자 줄 묶음을 TTS 한 번으로 뽑고, 무음 구간으로 잘라 컷마다 저장한다.
+  const handleBatchGenerate = async (batch: {
+    group: ScriptLineGroup;
+    voiceName: string;
+    stylePrompt: string;
+    language: DialogueLanguage;
+  }) => {
+    const { group, voiceName, language } = batch;
+    const texts = group.lines.map((l) => lineText(l, language));
+    if (texts.some((t) => !t)) {
+      setErrorMsg('이 묶음에는 이 언어 대사가 없는 줄이 있습니다.');
+      return;
+    }
+    const directions = group.lines
+      .map((l, i) => (l.direction ? `Line ${i + 1}: ${l.direction}` : ''))
+      .filter(Boolean)
+      .join(' ');
+    const stylePrompt = [batch.stylePrompt.trim(), BATCH_INSTRUCTION, directions].filter(Boolean).join(' ');
+
+    setIsLoading(true);
+    setErrorMsg(null);
+    try {
+      const res = await fetch('/api/dubbing/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: texts.join('\n\n'), voiceName, stylePrompt, language }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `묶음 생성 실패 (${res.status})`);
+      const wholeUrl = `data:${data.mimeType || 'audio/wav'};base64,${data.audioBase64}`;
+      const createdAt = Date.now();
+
+      let clips: DubbingItem[];
+      try {
+        const { segments, suspicious } = await takeSplitter.split(
+          wholeUrl,
+          texts.map((t) => t!.replace(/<[^>]+>|\s/g, '').length),
+        );
+        clips = group.lines.map((line, i) => ({
+          id: `batch-${createdAt}-${i}`,
+          presetName: `${line.cut} ${voiceName} (묶음)`,
+          voiceName,
+          text: texts[i]!,
+          stylePrompt,
+          scriptLineId: line.id,
+          language,
+          mimeType: 'audio/wav',
+          audioUrl: segments[i].audioUrl,
+          duration: segments[i].durationSec,
+          // 목록은 최신순이라 첫 줄이 위에 오도록 뒤 줄일수록 조금 이르게 둔다.
+          createdAt: createdAt - i,
+        }));
+        if (suspicious.length > 0) {
+          setErrorMsg(`자른 길이가 대사와 맞지 않아 보입니다. 들어 보고 확인하세요: ${suspicious.map((i) => group.lines[i].cut).join(', ')}`);
+        }
+      } catch (splitError: any) {
+        // 자르기에 실패해도 호출은 이미 썼으니 통째로 남긴다.
+        clips = [
+          {
+            id: `batch-${createdAt}`,
+            presetName: `묶음 ${group.id} ${voiceName} (자르기 실패)`,
+            voiceName,
+            text: texts.join(' / '),
+            stylePrompt,
+            language,
+            mimeType: data.mimeType || 'audio/wav',
+            audioUrl: wholeUrl,
+            createdAt,
+          },
+        ];
+        setErrorMsg(`묶음을 줄마다 자르지 못해 통째로 저장했습니다: ${splitError.message}`);
+      }
+      [...clips].reverse().forEach(addClip);
+      handleSelectHistoryClip(clips[0]);
+    } catch (err: any) {
+      setErrorMsg(err.message || '묶음 생성 중 문제가 발생했습니다.');
     } finally {
       setIsLoading(false);
     }
@@ -668,12 +773,18 @@ export default function App() {
         onClose={() => setIsCustomStudioOpen(false)}
         isLoading={isLoading}
         onGenerate={handleCustomGenerate}
+        onGenerateBatch={handleBatchGenerate}
         script={script}
         isScriptLoading={isScriptLoading}
         onReloadScript={reloadScript}
       />
 
-      <VoiceAuditionModal isOpen={isAuditionOpen} onClose={() => setIsAuditionOpen(false)} />
+      <VoiceAuditionModal
+        isOpen={isAuditionOpen}
+        onClose={() => setIsAuditionOpen(false)}
+        clips={history}
+        onClipCreated={addClip}
+      />
 
       {/* Scene Manager Modal */}
       <SceneManagerModal
