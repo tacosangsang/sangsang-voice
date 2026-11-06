@@ -1,19 +1,25 @@
 import React from 'react';
-import { DubbingPreset } from '../types';
-import { Play, Sparkles, Check, Mic2, Flame } from 'lucide-react';
+import { DubbingItem, DubbingPreset } from '../types';
+import { Play, Check, Mic2, Wand2 } from 'lucide-react';
 
 interface VoiceSelectorProps {
   presets: DubbingPreset[];
   activePresetId: string;
   isLoading: boolean;
-  onSelectPreset: (preset: DubbingPreset) => void;
+  /** 이 프리셋 조건으로 이미 만든 음성. 있으면 "듣기"가 호출 없이 재생한다. */
+  findClip: (preset: DubbingPreset) => DubbingItem | undefined;
+  onPlay: (clip: DubbingItem) => void;
+  /** TTS 호출 1회 */
+  onGenerate: (preset: DubbingPreset) => void;
 }
 
 export const VoiceSelector: React.FC<VoiceSelectorProps> = ({
   presets,
   activePresetId,
   isLoading,
-  onSelectPreset,
+  findClip,
+  onPlay,
+  onGenerate,
 }) => {
   return (
     <div className="space-y-4">
@@ -32,12 +38,12 @@ export const VoiceSelector: React.FC<VoiceSelectorProps> = ({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {presets.map((preset) => {
           const isActive = preset.id === activePresetId;
+          const clip = findClip(preset);
 
           return (
             <div
               key={preset.id}
-              onClick={() => !isLoading && onSelectPreset(preset)}
-              className={`group relative flex flex-col justify-between p-4 rounded-xl border text-left cursor-pointer transition-all duration-300 ${
+              className={`group relative flex flex-col justify-between p-4 rounded-xl border text-left transition-all duration-300 ${
                 isActive
                   ? 'bg-neutral-900 border-red-500/80 shadow-[0_0_20px_rgba(239,68,68,0.2)] ring-1 ring-red-500/50'
                   : 'bg-neutral-900/50 border-neutral-800 hover:border-neutral-700 hover:bg-neutral-900/80'
@@ -86,17 +92,26 @@ export const VoiceSelector: React.FC<VoiceSelectorProps> = ({
                   {!preset.formattedText.includes('<breath>') && !preset.formattedText.includes('<laugh>') && '정갈한 독백'}
                 </span>
 
-                <button
-                  disabled={isLoading}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
-                    isActive
-                      ? 'bg-red-600 text-white shadow-md'
-                      : 'bg-neutral-800 text-neutral-300 group-hover:bg-neutral-700 group-hover:text-white'
-                  }`}
-                >
-                  <Play className="w-3 h-3 fill-current" />
-                  <span>듣기</span>
-                </button>
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={() => clip && onPlay(clip)}
+                    disabled={!clip}
+                    title={clip ? '저장된 음성 재생 (호출 없음)' : '아직 생성하지 않았습니다'}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-neutral-800 text-neutral-200 hover:bg-neutral-700 disabled:opacity-40"
+                  >
+                    <Play className="w-3 h-3 fill-current" />
+                    <span>듣기</span>
+                  </button>
+                  <button
+                    onClick={() => onGenerate(preset)}
+                    disabled={isLoading}
+                    title="TTS 호출 1회"
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-red-700 text-white hover:bg-red-600 disabled:opacity-50"
+                  >
+                    <Wand2 className="w-3 h-3" />
+                    <span>{clip ? '다시 생성' : '생성'}</span>
+                  </button>
+                </div>
               </div>
             </div>
           );

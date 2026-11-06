@@ -2,7 +2,9 @@ import React, { useMemo, useState } from 'react';
 import { X, Sparkles, Mic, Volume2, Wand2, Plus, RefreshCw } from 'lucide-react';
 import { findScriptLine, lineText } from '../data/platingScript';
 import { ScriptSnapshot } from '../script/source';
-import { ScriptLineGroup, groupConsecutiveLines } from '../script/lineGroups';
+import { ScriptLineGroup, batchRequest, groupConsecutiveLines } from '../script/lineGroups';
+import { findGenerated } from '../data/generationCache';
+import { DubbingItem } from '../types';
 import { DialogueLanguage, LANGUAGES, DEFAULT_LANGUAGE } from '../shared/language';
 
 interface CustomStudioModalProps {
@@ -25,6 +27,9 @@ interface CustomStudioModalProps {
     language: DialogueLanguage;
   }) => Promise<void>;
   script: ScriptSnapshot;
+  /** 저장된 음성 전체. 같은 조건이 있으면 호출 없이 듣기를 먼저 보여 준다. */
+  clips: DubbingItem[];
+  onPlayClip: (clip: DubbingItem) => void;
   isScriptLoading: boolean;
   onReloadScript: () => void;
 }
@@ -36,6 +41,8 @@ export const CustomStudioModal: React.FC<CustomStudioModalProps> = ({
   onGenerate,
   onGenerateBatch,
   script,
+  clips,
+  onPlayClip,
   isScriptLoading,
   onReloadScript,
 }) => {
@@ -60,8 +67,21 @@ export const CustomStudioModal: React.FC<CustomStudioModalProps> = ({
   );
   const [groupId, setGroupId] = useState('');
   const group = groups.find((g) => g.id === groupId);
-  const groupTexts = group?.lines.map((l) => lineText(l, language));
+  const batch = group && batchRequest(group, stylePrompt, language);
+  const groupTexts = batch?.texts;
   const groupReady = !!groupTexts && groupTexts.every(Boolean);
+  const fullStylePrompt = lineDirection.trim() ? `${stylePrompt.trim()} ${lineDirection.trim()}` : stylePrompt;
+
+  // 같은 조건으로 이미 만든 음성. 묶음은 모든 줄이 저장돼 있어야 한다.
+  const cachedClips: DubbingItem[] | undefined = (() => {
+    if (mode === 'group') {
+      if (!batch || !groupReady) return undefined;
+      const found = batch.texts.map((t) => findGenerated(clips, { text: t!, voiceName, stylePrompt: batch.stylePrompt, language }));
+      return found.every(Boolean) ? (found as DubbingItem[]) : undefined;
+    }
+    const found = text.trim() && findGenerated(clips, { text, voiceName, stylePrompt: fullStylePrompt, language });
+    return found ? [found] : undefined;
+  })();
 
   if (!isOpen) return null;
 
@@ -126,7 +146,7 @@ export const CustomStudioModal: React.FC<CustomStudioModalProps> = ({
     await onGenerate({
       text: text.trim(),
       voiceName,
-      stylePrompt: lineDirection.trim() ? `${stylePrompt.trim()} ${lineDirection.trim()}` : stylePrompt,
+      stylePrompt: fullStylePrompt,
       presetName: scriptLine ? `${scriptLine.cut} ${voiceName}` : `커스텀 더빙 (${voiceName})`,
       scriptLineId: scriptLine && text.trim() ? scriptLine.id : undefined,
       language,
@@ -440,6 +460,19 @@ export const CustomStudioModal: React.FC<CustomStudioModalProps> = ({
             >
               취소
             </button>
+            {cachedClips && (
+              <button
+                type="button"
+                onClick={() => {
+                  onPlayClip(cachedClips[0]);
+                  onClose();
+                }}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-white text-xs font-bold"
+              >
+                <Volume2 className="w-4 h-4" />
+                <span>저장된 음성 듣기 (호출 없음)</span>
+              </button>
+            )}
             <button
               type="submit"
               disabled={isLoading || (mode === 'group' ? !groupReady : !text.trim())}
@@ -453,7 +486,7 @@ export const CustomStudioModal: React.FC<CustomStudioModalProps> = ({
               ) : (
                 <>
                   <Wand2 className="w-4 h-4" />
-                  <span>{mode === 'group' ? '묶음 생성 (호출 1번)' : '새로운 분위기로 더빙하기'}</span>
+                  <span>{cachedClips ? '다시 생성 (호출 1회)' : mode === 'group' ? '묶음 생성 (호출 1회)' : '생성 (호출 1회)'}</span>
                 </>
               )}
             </button>

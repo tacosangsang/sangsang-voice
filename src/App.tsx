@@ -3,6 +3,8 @@ import { CinematicViewer } from './components/CinematicViewer';
 import { VoiceSelector } from './components/VoiceSelector';
 import { AudioPlayerBar } from './components/AudioPlayerBar';
 import { CustomStudioModal } from './components/CustomStudioModal';
+import { ClipLibrary } from './components/ClipLibrary';
+import { findGenerated } from './data/generationCache';
 import { useScript } from './script/useScript';
 import { SceneManagerModal } from './components/SceneManagerModal';
 import { VoiceAuditionModal } from './components/VoiceAuditionModal';
@@ -12,14 +14,11 @@ import { audioEngine } from './utils/audioEngine';
 import { DialogueLanguage } from './shared/language';
 import { IndexedDbStore, openRecordStore } from './storage/recordStore';
 import { LegacyTake, clipFromLegacyTake } from './data/auditionClip';
-import { ScriptLineGroup } from './script/lineGroups';
+import { ScriptLineGroup, batchRequest } from './script/lineGroups';
 import { SilenceTakeSplitter, TakeSplitter } from './audio/takeSplitter';
-import { lineText } from './data/platingScript';
 import {
   Sparkles,
   Film,
-  History,
-  Play,
   AlertCircle,
   Quote,
   Layers,
@@ -81,10 +80,6 @@ const DEFAULT_PRESETS: DubbingPreset[] = [
 const clipStore = openRecordStore<DubbingItem>('clips', 'id', 'audioUrl');
 
 const takeSplitter: TakeSplitter = new SilenceTakeSplitter();
-
-/** 묶음 생성 때 지시문 뒤에 붙인다. 줄 사이 쉼이 있어야 무음으로 자를 수 있다. */
-const BATCH_INSTRUCTION =
-  'These are separate lines read one after another. Leave a clear silence of about one second between lines.';
 
 export default function App() {
   const { script, isLoading: isScriptLoading, reload: reloadScript } = useScript();
@@ -433,16 +428,11 @@ export default function App() {
     language: DialogueLanguage;
   }) => {
     const { group, voiceName, language } = batch;
-    const texts = group.lines.map((l) => lineText(l, language));
+    const { texts, stylePrompt } = batchRequest(group, batch.stylePrompt, language);
     if (texts.some((t) => !t)) {
       setErrorMsg('이 묶음에는 이 언어 대사가 없는 줄이 있습니다.');
       return;
     }
-    const directions = group.lines
-      .map((l, i) => (l.direction ? `Line ${i + 1}: ${l.direction}` : ''))
-      .filter(Boolean)
-      .join(' ');
-    const stylePrompt = [batch.stylePrompt.trim(), BATCH_INSTRUCTION, directions].filter(Boolean).join(' ');
 
     setIsLoading(true);
     setErrorMsg(null);
@@ -657,18 +647,29 @@ export default function App() {
           onOpenCustomStudio={() => setIsCustomStudioOpen(true)}
         />
 
+        <ClipLibrary
+          clips={history}
+          currentClipId={currentClip?.id}
+          target={clipTarget}
+          onPlay={handleSelectHistoryClip}
+        />
+
         {/* Character Voice Personas Grid */}
         <VoiceSelector
           presets={presets}
           activePresetId={activePresetId}
           isLoading={isLoading}
-          onSelectPreset={(preset) => handleGenerateDubbing(preset, true)}
+          findClip={(preset) =>
+            findGenerated(history, { text: preset.formattedText, voiceName: preset.voiceName, stylePrompt: preset.stylePrompt })
+          }
+          onPlay={handleSelectHistoryClip}
+          onGenerate={(preset) => handleGenerateDubbing(preset, true)}
         />
 
         {/* Dialogue & Scene Insight Breakdown */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-2">
+        <div className="pt-2">
           {/* Quote Analysis Card (Dynamically driven by active scene) */}
-          <div className="lg:col-span-2 p-5 rounded-2xl bg-neutral-900/60 border border-neutral-800 space-y-3">
+          <div className="p-5 rounded-2xl bg-neutral-900/60 border border-neutral-800 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-red-400">
                 <Quote className="w-4 h-4" />
@@ -701,64 +702,6 @@ export default function App() {
               <span className="px-2 py-0.5 rounded bg-neutral-800/80">#Gemini_TTS_Voicing</span>
             </div>
           </div>
-
-          {/* Dubbing History Log */}
-          <div className="p-5 rounded-2xl bg-neutral-900/60 border border-neutral-800 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-xs font-semibold text-neutral-300">
-                <History className="w-4 h-4 text-neutral-400" />
-                <span>생성 클립 ({history.length})</span>
-                {clipTarget && <span className="font-normal text-neutral-500">· 저장 위치: {clipTarget}</span>}
-              </div>
-            </div>
-
-            {history.length === 0 ? (
-              <p className="text-xs text-neutral-500 py-4 text-center">
-                생성된 더빙 음원이 여기에 보관됩니다.
-              </p>
-            ) : (
-              <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
-                {history.map((clip) => {
-                  const isCurrent = currentClip?.id === clip.id;
-                  return (
-                    <div
-                      key={clip.id}
-                      onClick={() => handleSelectHistoryClip(clip)}
-                      className={`p-2.5 rounded-xl border text-xs cursor-pointer flex items-center justify-between transition-colors ${
-                        isCurrent
-                          ? 'bg-red-950/40 border-red-500/80 text-white'
-                          : 'bg-neutral-950 border-neutral-800/80 text-neutral-300 hover:border-neutral-700'
-                      }`}
-                    >
-                      <div className="truncate mr-2">
-                        <div className="font-semibold truncate">
-                          {clip.scriptLineId && <span className="font-mono text-neutral-400 mr-1.5">{clip.scriptLineId}</span>}
-                          {clip.presetName}
-                        </div>
-                        <div className="text-[10px] text-neutral-500 truncate">{clip.text}</div>
-                        <div className="text-[10px] text-neutral-500 font-mono truncate">
-                          {clip.voiceName} •{' '}
-                          {new Date(clip.createdAt).toLocaleString([], {
-                            month: '2-digit',
-                            day: '2-digit',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </div>
-                      </div>
-                      <button
-                        className={`p-1.5 rounded-lg shrink-0 ${
-                          isCurrent ? 'bg-red-600 text-white' : 'bg-neutral-800 text-neutral-300'
-                        }`}
-                      >
-                        <Play className="w-3 h-3 fill-current" />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
         </div>
       </main>
 
@@ -774,6 +717,8 @@ export default function App() {
         isLoading={isLoading}
         onGenerate={handleCustomGenerate}
         onGenerateBatch={handleBatchGenerate}
+        clips={history}
+        onPlayClip={handleSelectHistoryClip}
         script={script}
         isScriptLoading={isScriptLoading}
         onReloadScript={reloadScript}

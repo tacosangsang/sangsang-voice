@@ -3,6 +3,7 @@ import { Play, Pause, RotateCcw, Download, Sliders, Volume2, Sparkles, Mic, Laye
 import { DubbingItem } from '../types';
 import { ScriptLine, checkFit, findScriptLine } from '../data/platingScript';
 import { effectsFromSettings, renderWithEffects } from '../audio/offlineRender';
+import { clipFileName, downloadUrl } from '../utils/download';
 
 interface AudioPlayerBarProps {
   currentClip: DubbingItem | null;
@@ -55,24 +56,10 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
   const scriptLine = findScriptLine(scriptLines, currentClip?.scriptLineId);
   const fit = scriptLine && duration > 0 ? checkFit(scriptLine, duration / playbackRate) : undefined;
 
-  const saveFile = (href: string, name: string) => {
-    const link = document.createElement('a');
-    link.href = href;
-    link.download = name;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const baseName = () => {
-    const prefix = scriptLine ? scriptLine.cut.replace('#', '') : 'dub';
-    return `${prefix}_${currentClip?.language ?? 'ko'}_${currentClip?.voiceName}_${Date.now()}`;
-  };
-
   // 원본: TTS가 만든 음성 그대로
   const handleDownload = () => {
     if (!currentClip) return;
-    saveFile(currentClip.audioUrl, `${baseName()}_raw.wav`);
+    downloadUrl(currentClip.audioUrl, clipFileName(currentClip, 'raw'));
   };
 
   // 효과 포함: 지금 들리는 잔향·드론을 입혀 렌더 (재생 속도는 제외, offlineRender.ts 주석 참고)
@@ -85,7 +72,7 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
         effectsFromSettings({ reverb: reverbAmount, darkDrone: atmosphereDrone })
       );
       const url = URL.createObjectURL(blob);
-      saveFile(url, `${baseName()}_fx.wav`);
+      downloadUrl(url, clipFileName(currentClip, 'fx'));
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (e) {
       console.error('효과 렌더 실패:', e);
