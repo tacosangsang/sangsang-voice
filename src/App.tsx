@@ -170,21 +170,32 @@ export default function App() {
   // 예전에 만든 클립을 모두 불러온다. 개수 제한 없이 최신순.
   useEffect(() => {
     clipStore
-      .then((store) => {
+      .then(async (store) => {
         setClipTarget(store.target);
-        return store.list();
-      })
-      .then(async (restored) => {
-        // 예전에 목소리 비교 음성만 따로 브라우저에 두던 것(takes)을 생성 클립으로 옮긴다. 같은 id라 여러 번 돌아도 하나다.
+        const restored = await store.list();
         const ids = new Set(restored.map((c) => c.id));
+        // 다른 곳에 남은 음성을 지금 저장소로 옮긴다. 같은 id는 같은 음성이라 여러 번 돌아도 하나다.
+        // - 예전에 목소리 비교 음성만 따로 두던 브라우저 takes
+        // - 깃허브 저장이 꺼져 있던 동안 이 브라우저에만 저장된 clips
         const legacy = await new IndexedDbStore<LegacyTake>('takes').list().catch(() => []);
-        const moved = legacy.map(clipFromLegacyTake).filter((c): c is DubbingItem => !!c && !ids.has(c.id));
+        const localOnly =
+          store instanceof IndexedDbStore ? [] : await new IndexedDbStore<DubbingItem>('clips').list().catch(() => []);
+        const moved = [...legacy.map(clipFromLegacyTake), ...localOnly].filter((c): c is DubbingItem => {
+          if (!c || ids.has(c.id)) return false;
+          ids.add(c.id);
+          return true;
+        });
         setHistory((prev) => {
           const seen = new Set(prev.map((c) => c.id));
           const loaded = [...restored, ...moved].filter((c) => !seen.has(c.id));
           return [...prev, ...loaded].sort((a, b) => b.createdAt - a.createdAt);
         });
-        moved.forEach(saveClip);
+        // 깃허브 목록 파일을 동시에 고치면 충돌하므로 하나씩 올린다.
+        const failed: string[] = [];
+        for (const clip of moved) {
+          await store.put(clip).catch((e) => failed.push(`${clip.scriptLineId ?? clip.voiceName}: ${e?.message ?? e}`));
+        }
+        if (failed.length) setErrorMsg(`${moved.length}개 중 ${failed.length}개를 ${store.target}에 옮기지 못했습니다. ${failed[0]}`);
       })
       .catch((e) => setErrorMsg(`저장된 클립을 불러오지 못했습니다: ${e?.message ?? e}`));
   }, []);

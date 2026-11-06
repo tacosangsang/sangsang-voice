@@ -48,9 +48,10 @@ function openDb(): Promise<IDBDatabase> {
 }
 
 export class IndexedDbStore<T> implements RecordStore<T> {
-  readonly target = '이 브라우저';
-
-  constructor(private readonly store: LocalStoreName) {}
+  constructor(
+    private readonly store: LocalStoreName,
+    readonly target = '이 브라우저',
+  ) {}
 
   async list(): Promise<T[]> {
     const conn = await openDb();
@@ -115,8 +116,8 @@ let status: Promise<RecordingStatus> | undefined;
 
 function recordingStatus(): Promise<RecordingStatus> {
   status ??= fetch('/api/recordings/status')
-    .then((r) => (r.ok ? r.json() : { enabled: false }))
-    .catch(() => ({ enabled: false }));
+    .then((r) => (r.ok ? r.json() : { enabled: false, reason: `상태 확인 실패 (${r.status})` }))
+    .catch((e) => ({ enabled: false, reason: `상태 확인 실패: ${e?.message ?? e}` }));
   return status;
 }
 
@@ -127,5 +128,6 @@ export async function openRecordStore<T extends Recordable>(
   audioKey: StringKey<T>,
 ): Promise<RecordStore<T>> {
   const s = await recordingStatus();
-  return s.enabled ? new ServerRecordStore<T>(store, idKey, audioKey, s.target ?? '서버') : new IndexedDbStore<T>(store);
+  if (s.enabled) return new ServerRecordStore<T>(store, idKey, audioKey, s.target ?? '서버');
+  return new IndexedDbStore<T>(store, s.reason ? `이 브라우저 (깃허브 저장 꺼짐: ${s.reason})` : '이 브라우저');
 }

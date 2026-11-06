@@ -225,9 +225,27 @@ const recordings: RecordingRepository | undefined = process.env.GITHUB_TOKEN
     )
   : undefined;
 
-app.get('/api/recordings/status', (_req, res) => {
-  const status: RecordingStatus = { enabled: !!recordings, target: recordings?.target };
-  res.json(status);
+// 토큰이 있어도 이름·권한·브랜치가 틀리면 저장이 안 된다. 화면에 이유를 보이도록 한 번 확인해 둔다(실패는 다음 요청에 다시 확인).
+let recordingsVerified: Promise<void> | undefined;
+
+app.get('/api/recordings/status', async (_req, res) => {
+  if (!recordings) {
+    const status: RecordingStatus = { enabled: false, reason: '서버에 GITHUB_TOKEN이 없습니다.' };
+    return res.json(status);
+  }
+  recordingsVerified ??= recordings.verify().catch((e) => {
+    recordingsVerified = undefined;
+    throw e;
+  });
+  try {
+    await recordingsVerified;
+    const status: RecordingStatus = { enabled: true, target: recordings.target };
+    res.json(status);
+  } catch (error: any) {
+    console.error('GitHub recordings unavailable:', error);
+    const status: RecordingStatus = { enabled: false, reason: `${recordings.target}에 닿지 못했습니다: ${error.message}` };
+    res.json(status);
+  }
 });
 
 app.get('/api/recordings/:store', async (req, res) => {

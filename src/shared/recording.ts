@@ -22,6 +22,8 @@ export interface RecordingStatus {
   enabled: boolean;
   /** 사람에게 보여 줄 저장 위치, 예: owner/repo@recordings */
   target?: string;
+  /** enabled가 false인 이유 */
+  reason?: string;
 }
 
 export function recordingAudioUrl(store: RecordingStoreName, id: string): string {

@@ -8,6 +8,8 @@ import { RecordingMeta, RecordingStoreName } from '../src/shared/recording';
 export interface RecordingRepository {
   /** 사람에게 보여 줄 저장 위치 */
   readonly target: string;
+  /** 저장소에 닿는지 확인한다. 안 되면 이유를 담아 던진다. */
+  verify(): Promise<void>;
   list(store: RecordingStoreName): Promise<RecordingMeta[]>;
   save(store: RecordingStoreName, meta: RecordingMeta, audio: Buffer): Promise<void>;
   readAudio(store: RecordingStoreName, id: string): Promise<Buffer>;
@@ -39,6 +41,10 @@ export class GitHubRecordingRepository implements RecordingRepository {
     private readonly branch: string,
   ) {
     this.target = `${repo}@${branch}`;
+  }
+
+  async verify(): Promise<void> {
+    await this.request(`/branches/${encodeURIComponent(this.branch)}`);
   }
 
   async list(store: RecordingStoreName): Promise<RecordingMeta[]> {
@@ -121,7 +127,13 @@ export class GitHubRecordingRepository implements RecordingRepository {
     });
     if (!res.ok) {
       const body = await res.text().catch(() => '');
-      throw new GitHubError(res.status, `GitHub ${res.status} ${path}: ${body.slice(0, 200)}`);
+      let detail = body.slice(0, 200);
+      try {
+        detail = JSON.parse(body).message ?? detail;
+      } catch {
+        // JSON이 아니면 본문 앞부분을 그대로 쓴다.
+      }
+      throw new GitHubError(res.status, `GitHub ${res.status} ${path}: ${detail}`);
     }
     return res;
   }
