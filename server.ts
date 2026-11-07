@@ -7,7 +7,7 @@ import { createServer as createViteServer } from 'vite';
 import { createApp } from './server/app';
 import type { GeminiClient } from './server/app';
 import { recordingsConfig } from './server/recordingsConfig';
-import { NotionScriptSource } from './server/notionScriptSource';
+import { DEFAULT_SCRIPT_PAGE_ID, NotionScriptSource } from './server/notionScriptSource';
 import { BundledScriptSource } from './src/script/bundledSource';
 import type { ScriptSource } from './src/script/source';
 
@@ -39,7 +39,6 @@ function getAiClient(): GeminiClient | undefined {
   });
 }
 
-const DEFAULT_SCRIPT_PAGE_ID = '3eb339339b9b8007bf8afbdd52102e49';
 const bundledScript = new BundledScriptSource();
 const notionScript: ScriptSource | undefined = process.env.NOTION_TOKEN
   ? new NotionScriptSource(process.env.NOTION_TOKEN, process.env.NOTION_SCRIPT_PAGE_ID || DEFAULT_SCRIPT_PAGE_ID)

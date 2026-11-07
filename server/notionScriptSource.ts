@@ -8,6 +8,8 @@ import { ScriptSnapshot, ScriptSource } from '../src/script/source';
 const NOTION_API = 'https://api.notion.com/v1';
 const NOTION_VERSION = '2022-06-28';
 
+export const DEFAULT_SCRIPT_PAGE_ID = '3eb339339b9b8007bf8afbdd52102e49';
+
 interface BlockChildrenResponse {
   results: NotionBlock[];
   has_more: boolean;
