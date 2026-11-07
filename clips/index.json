@@ -15,5 +15,22 @@
    "mimeType": "audio/wav",
    "createdAt": 1794013443056
   }
+ },
+ {
+  "id": "audition:anchor|Kore|S#01-C001|Polished state TV newscaster. Polite formal speech, steady even pace, emotionally neutral, quietly propagandistic.|ko",
+  "createdAt": 1794014577031,
+  "mimeType": "audio/wav",
+  "fields": {
+   "id": "audition:anchor|Kore|S#01-C001|Polished state TV newscaster. Polite formal speech, steady even pace, emotionally neutral, quietly propagandistic.|ko",
+   "auditionKey": "anchor|Kore|S#01-C001|Polished state TV newscaster. Polite formal speech, steady even pace, emotionally neutral, quietly propagandistic.|ko",
+   "presetName": "목소리 비교 · 앵커 Kore",
+   "voiceName": "Kore",
+   "text": "다음 소식입니다. 어제 낮 기온이 37도까지 치솟으며…",
+   "stylePrompt": "Polished state TV newscaster. Polite formal speech, steady even pace, emotionally neutral, quietly propagandistic.",
+   "scriptLineId": "S#01-C001",
+   "language": "ko",
+   "mimeType": "audio/wav",
+   "createdAt": 1794014577031
+  }
  }
 ]
