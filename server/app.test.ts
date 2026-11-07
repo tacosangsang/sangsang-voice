@@ -352,12 +352,14 @@ describe('서버 라우트', () => {
   });
 
   for (const [label, body, message] of [
-    ['대사가 숫자', { text: 7 }, 'text.trim is not a function'],
-    ['연기 지시가 숫자', { stylePrompt: 7 }, 'stylePrompt.trim is not a function'],
+    ['대사가 숫자', { text: 7 }, 'text은(는) 문자열이어야 합니다.'],
+    ['목소리가 숫자', { voiceName: 7 }, 'voiceName은(는) 문자열이어야 합니다.'],
+    ['연기 지시가 숫자', { stylePrompt: 7 }, 'stylePrompt은(는) 문자열이어야 합니다.'],
+    ['모델 선호가 숫자', { modelPreference: 7 }, 'modelPreference은(는) 문자열이어야 합니다.'],
   ] as const) {
-    test(`더빙 입력 타입 오류는 현재 내부 오류로 반환한다: ${label}`, async () => {
-      const response = await postJson(readyUrl, '/api/dubbing/generate', body);
-      assert.equal(response.status, 500);
+    test(`더빙 입력 타입 오류는 키 확인 전에 400으로 반환한다: ${label}`, async () => {
+      const response = await postJson(emptyUrl, '/api/dubbing/generate', body);
+      assert.equal(response.status, 400);
       assert.deepEqual(await response.json(), { error: message });
       assert.deepEqual(generationCalls, []);
     });
@@ -393,7 +395,7 @@ describe('서버 라우트', () => {
     }]);
   });
 
-  test('빈 더빙 요청은 현재 기본 대사와 목소리 및 한국어를 사용한다', async () => {
+  test('빈 더빙 요청은 기본 대사와 목소리 및 한국어를 사용한다', async () => {
     const response = await postJson(readyUrl, '/api/dubbing/generate', {});
     assert.equal(response.status, 200);
     const body = await response.json();
@@ -403,11 +405,11 @@ describe('서버 라우트', () => {
     assert.equal(body.usedModel, 'gemini-3.8-flash-tts');
   });
 
-  test('공백뿐인 대사는 현재 검증 없이 모델에 전달한다', async () => {
-    const response = await postJson(readyUrl, '/api/dubbing/generate', { text: '   ' });
-    assert.equal(response.status, 200);
-    assert.equal((await response.json()).text, '');
-    assert.equal(generationCalls.length, 1);
+  test('공백뿐인 대사는 키 확인 전에 400으로 반환한다', async () => {
+    const response = await postJson(emptyUrl, '/api/dubbing/generate', { text: '   ' });
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), { error: '대사가 비어 있습니다.' });
+    assert.deepEqual(generationCalls, []);
   });
 
   test('경량 모델 선호와 알 수 없는 언어의 한국어 기본값을 적용한다', async () => {

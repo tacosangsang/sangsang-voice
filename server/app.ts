@@ -257,12 +257,22 @@ export function createApp(deps: AppDependencies): Express {
   // 대사 음성 생성
   app.post('/api/dubbing/generate', async (req, res) => {
     try {
+      for (const field of ['text', 'voiceName', 'stylePrompt', 'modelPreference'] as const) {
+        const value: unknown = req.body[field];
+        if (value !== undefined && typeof value !== 'string') {
+          return res.status(400).json({ error: `${field}은(는) 문자열이어야 합니다.` });
+        }
+      }
       const {
         text = '신은 두 접시 중 하나만 고릅니다. 다른 하나가 초라하면 더 쉽겠지요.',
         voiceName = 'Charon',
         stylePrompt = 'A chilling, calm, sophisticated and cynical Korean voice with subtle breath',
         modelPreference = 'gemini-3.8-flash-tts',
       } = req.body;
+      const cleanText = text.trim();
+      if (!cleanText) {
+        return res.status(400).json({ error: '대사가 비어 있습니다.' });
+      }
       const language = toLanguage(req.body.language);
       // 언어 지시는 서버 한 곳에서만 붙인다. 프리셋 지시문에는 언어를 적지 않는다.
       const styleWithLanguage = `${stylePrompt.trim()} ${LANGUAGES[language].ttsInstruction}`;
@@ -274,7 +284,6 @@ export function createApp(deps: AppDependencies): Express {
         });
       }
 
-      const cleanText = text.trim();
       const primaryModel =
         modelPreference === 'gemini-3.8-flash-lite-tts'
           ? 'gemini-3.8-flash-lite-tts'
