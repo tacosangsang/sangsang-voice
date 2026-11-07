@@ -83,5 +83,22 @@
    "mimeType": "audio/wav",
    "createdAt": 1794034973892
   }
+ },
+ {
+  "id": "audition:rabbit|Enceladus|S#09-C004|Masked servant of the elite. Low, polite and very calm, almost no rise and fall in pitch, unreadable.|ko",
+  "createdAt": 1794034986568,
+  "mimeType": "audio/wav",
+  "fields": {
+   "id": "audition:rabbit|Enceladus|S#09-C004|Masked servant of the elite. Low, polite and very calm, almost no rise and fall in pitch, unreadable.|ko",
+   "auditionKey": "rabbit|Enceladus|S#09-C004|Masked servant of the elite. Low, polite and very calm, almost no rise and fall in pitch, unreadable.|ko",
+   "presetName": "목소리 비교 · 토끼 Enceladus",
+   "voiceName": "Enceladus",
+   "text": "신은 두 접시 중 하나만 고릅니다. 다른 하나가 초라하면 더 쉽겠지요.",
+   "stylePrompt": "Masked servant of the elite. Low, polite and very calm, almost no rise and fall in pitch, unreadable.",
+   "scriptLineId": "S#09-C004",
+   "language": "ko",
+   "mimeType": "audio/wav",
+   "createdAt": 1794034986568
+  }
  }
 ]
