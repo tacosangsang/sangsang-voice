@@ -3,7 +3,7 @@
 PLATING(10분 AI 애니메이션)의 대사 녹음본을 Gemini TTS로 만드는 도구. 답변과 주석은 한국어, 이모지 금지.
 
 ## 구조
-- `server.ts`: Express. `/api/dubbing/generate`가 Gemini TTS를 부르고, 응답 오디오를 `extractWavAudio`로 WAV로 바꿔 base64로 돌려준다. `/api/scenes/ai-generate`는 씬 이미지 생성.
+- `server.ts`: 환경 변수로 의존을 만들고 Vite·정적 파일·서버 시작을 맡는다. `server/app.ts`의 `createApp(deps)`가 모든 API 라우트를 등록한다. `server/recordingsConfig.ts`는 전달받은 환경 값으로 녹음 저장소 설정을 만든다.
 - `src/shared/wav.ts`: 서버·브라우저 공용 WAV 유틸(raw PCM에 헤더 씌우기, float 채널 인코딩).
 - `src/audio/effects.ts`: `AudioEffect` 인터페이스와 잔향·드론 구현. 실시간 재생과 내보내기가 같은 정의를 쓴다. 새 효과는 이 인터페이스를 구현한다.
 - `src/audio/offlineRender.ts`: OfflineAudioContext로 효과를 입혀 WAV를 만든다("효과 포함 WAV" 버튼).
