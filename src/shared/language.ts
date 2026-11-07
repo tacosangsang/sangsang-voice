@@ -18,5 +18,5 @@ export const LANGUAGES: Record<DialogueLanguage, LanguageInfo> = {
 export const DEFAULT_LANGUAGE: DialogueLanguage = 'ko';
 
 export function toLanguage(value: unknown): DialogueLanguage {
-  return typeof value === 'string' && value in LANGUAGES ? (value as DialogueLanguage) : DEFAULT_LANGUAGE;
+  return typeof value === 'string' && Object.hasOwn(LANGUAGES, value) ? (value as DialogueLanguage) : DEFAULT_LANGUAGE;
 }

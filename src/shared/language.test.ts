@@ -11,6 +11,6 @@ for (const [label, value, expected] of [
   });
 }
 
-test('상속된 속성 이름은 언어로 보지 않는다', { todo: '소스 수정 대기: LANGUAGES에 in 대신 Object.hasOwn' }, () => {
+test('상속된 속성 이름은 언어로 보지 않는다', () => {
   assert.equal(toLanguage('toString'), 'ko');
 });
