@@ -15,6 +15,7 @@ import { DEFAULT_REVERB } from './audio/effects';
 import { DialogueLanguage } from './shared/language';
 import { IndexedDbStore, openRecordStore } from './storage/recordStore';
 import { LegacyTake, clipFromLegacyTake } from './data/auditionClip';
+import { nextRecordName } from './data/recordName';
 import { ScriptLineGroup, batchRequest } from './script/lineGroups';
 import { SilenceTakeSplitter, TakeSplitter } from './audio/takeSplitter';
 import {
@@ -78,7 +79,7 @@ const DEFAULT_PRESETS: DubbingPreset[] = [
   },
 ];
 
-const clipStore = openRecordStore<DubbingItem>('clips', 'id', 'audioUrl');
+const clipStore = openRecordStore<DubbingItem>('clips', 'id', 'audioUrl', 'recordName');
 
 const takeSplitter: TakeSplitter = new SilenceTakeSplitter();
 
@@ -181,11 +182,19 @@ export default function App() {
         const legacy = await new IndexedDbStore<LegacyTake>('takes').list().catch(() => []);
         const localOnly =
           store instanceof IndexedDbStore ? [] : await new IndexedDbStore<DubbingItem>('clips').list().catch(() => []);
-        const moved = [...legacy.map(clipFromLegacyTake), ...localOnly].filter((c): c is DubbingItem => {
-          if (!c || ids.has(c.id)) return false;
-          ids.add(c.id);
-          return true;
-        });
+        const named = [...restored];
+        const moved = [...legacy.map(clipFromLegacyTake), ...localOnly]
+          .filter((c): c is DubbingItem => {
+            if (!c || ids.has(c.id)) return false;
+            ids.add(c.id);
+            return true;
+          })
+          .sort((a, b) => a.createdAt - b.createdAt)
+          .map((c) => {
+            const clip = c.recordName ? c : { ...c, recordName: nextRecordName(c, script.lines, script.speakers, named) };
+            named.push(clip);
+            return clip;
+          });
         setHistory((prev) => {
           const seen = new Set(prev.map((c) => c.id));
           const loaded = [...restored, ...moved].filter((c) => !seen.has(c.id));
@@ -207,14 +216,23 @@ export default function App() {
       .catch((e) => setErrorMsg(`클립 저장 실패(이번 화면에서만 들을 수 있음): ${e?.message ?? e}`));
   };
 
-  const addClip = (clip: DubbingItem) => {
-    setHistory((prev) => [clip, ...prev.filter((c) => c.id !== clip.id)]);
-    saveClip(clip);
+  // 같은 렌더 안에서 여러 개를 넣어도(묶음) 버전이 겹치지 않게, 이름 매길 때는 ref로 최신 목록을 본다.
+  const historyRef = useRef(history);
+  historyRef.current = history;
+
+  /** 저장 이름(씬/컷-인물-프리셋-버전)을 붙여 목록에 넣고 저장한다. */
+  const addClip = (clip: DubbingItem): DubbingItem => {
+    const named = clip.recordName
+      ? clip
+      : { ...clip, recordName: nextRecordName(clip, script.lines, script.speakers, historyRef.current) };
+    historyRef.current = [named, ...historyRef.current.filter((c) => c.id !== named.id)];
+    setHistory((prev) => [named, ...prev.filter((c) => c.id !== named.id)]);
+    saveClip(named);
+    return named;
   };
 
   const keepClip = (clip: DubbingItem) => {
-    setCurrentClip(clip);
-    addClip(clip);
+    setCurrentClip(addClip(clip));
   };
 
   // Initialize hidden audio element
@@ -499,8 +517,8 @@ export default function App() {
         ];
         setErrorMsg(`묶음을 줄마다 자르지 못해 통째로 저장했습니다: ${splitError.message}`);
       }
-      [...clips].reverse().forEach(addClip);
-      handleSelectHistoryClip(clips[0]);
+      const added = [...clips].reverse().map(addClip);
+      handleSelectHistoryClip(added[added.length - 1]);
     } catch (err: any) {
       setErrorMsg(err.message || '묶음 생성 중 문제가 발생했습니다.');
     } finally {

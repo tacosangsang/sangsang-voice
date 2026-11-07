@@ -41,6 +41,8 @@ export interface DubbingItem {
   /** 목소리 비교로 만든 음성의 생성 조건 키. 같은 조건이면 다시 부르지 않고 이 음성을 쓴다. */
   auditionKey?: string;
   language?: DialogueLanguage;
+  /** 저장 이름 <씬>/<컷>-<인물>-<프리셋>-v<버전> (src/data/recordName.ts). 깃허브 경로와 내려받기 이름에 쓴다. */
+  recordName?: string;
   createdAt: number;
 }
 

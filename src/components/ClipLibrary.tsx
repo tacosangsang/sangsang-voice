@@ -4,6 +4,7 @@ import React, { useMemo, useState } from 'react';
 import { Download, History, Play, Search } from 'lucide-react';
 import { DubbingItem } from '../types';
 import { clipFileName, downloadUrl } from '../utils/download';
+import { recordFileName } from '../data/recordName';
 
 interface ClipLibraryProps {
   clips: DubbingItem[];
@@ -19,7 +20,7 @@ export const ClipLibrary: React.FC<ClipLibraryProps> = ({ clips, currentClipId, 
     const q = query.trim().toLowerCase();
     if (!q) return clips;
     return clips.filter((c) =>
-      [c.scriptLineId, c.presetName, c.voiceName, c.text].some((v) => v?.toLowerCase().includes(q)),
+      [c.recordName, c.scriptLineId, c.presetName, c.voiceName, c.text].some((v) => v?.toLowerCase().includes(q)),
     );
   }, [clips, query]);
 
@@ -36,7 +37,7 @@ export const ClipLibrary: React.FC<ClipLibraryProps> = ({ clips, currentClipId, 
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="컷, 목소리, 대사로 찾기"
+            placeholder="컷, 인물, 목소리, 대사로 찾기"
             className="bg-transparent outline-none w-40 placeholder-neutral-600"
           />
         </label>
@@ -60,8 +61,12 @@ export const ClipLibrary: React.FC<ClipLibraryProps> = ({ clips, currentClipId, 
               >
                 <div className="min-w-0">
                   <div className="font-semibold truncate">
-                    {clip.scriptLineId && <span className="font-mono text-neutral-400 mr-1.5">{clip.scriptLineId}</span>}
-                    {clip.presetName}
+                    {recordFileName(clip) ?? (
+                      <>
+                        {clip.scriptLineId && <span className="font-mono text-neutral-400 mr-1.5">{clip.scriptLineId}</span>}
+                        {clip.presetName}
+                      </>
+                    )}
                   </div>
                   <div className="text-[10px] text-neutral-500 truncate">{clip.text}</div>
                   <div className="text-[10px] text-neutral-500 font-mono truncate">

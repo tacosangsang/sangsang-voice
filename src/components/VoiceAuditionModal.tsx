@@ -58,7 +58,14 @@ export const VoiceAuditionModal: React.FC<VoiceAuditionModalProps> = ({ isOpen, 
   // 키: 화자|목소리|대본 줄|지시문|언어. 조건이 하나라도 바뀌면 새로 생성하고, 같으면 저장된 음성을 재생한다.
   const [pending, setPending] = useState<Record<string, PendingTake>>({});
   const takeUrls = useMemo(
-    () => new Map(clips.filter((c) => c.auditionKey).map((c) => [c.auditionKey!, c.audioUrl])),
+    // 같은 조건을 다시 생성했으면 가장 최근 것. Map은 뒤에 넣은 값이 남는다.
+    () =>
+      new Map(
+        [...clips]
+          .filter((c) => c.auditionKey)
+          .sort((a, b) => a.createdAt - b.createdAt)
+          .map((c) => [c.auditionKey!, c.audioUrl]),
+      ),
     [clips],
   );
   const [callCount, setCallCount] = useState(0);

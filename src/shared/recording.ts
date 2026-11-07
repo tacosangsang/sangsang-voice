@@ -13,6 +13,10 @@ export interface RecordingMeta {
   id: string;
   createdAt: number;
   mimeType: string;
+  /** 사람이 읽는 저장 이름(폴더/이름, 확장자 없음). 없으면 저장소가 id로 이름을 만든다. */
+  name?: string;
+  /** 저장소가 정한 실제 경로. 저장소만 쓰고 채운다. */
+  path?: string;
   /** 저장소별 나머지 칸(대사, 목소리 등) */
   fields: Record<string, unknown>;
 }

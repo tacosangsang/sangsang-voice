@@ -19,6 +19,7 @@ export interface RecordStore<T> {
 /** 저장할 기록의 모양: id 칸, 음성 data URL 칸, 만든 시각. 나머지 칸은 그대로 저장한다. */
 type Recordable = { createdAt: number };
 type StringKey<T> = { [K in keyof T]: T[K] extends string ? K : never }[keyof T];
+type OptionalStringKey<T> = { [K in keyof T]-?: T[K] extends string | undefined ? K : never }[keyof T];
 
 // ---------- IndexedDB (이 브라우저에만) ----------
 
@@ -82,6 +83,8 @@ export class ServerRecordStore<T extends Recordable> implements RecordStore<T> {
     private readonly idKey: StringKey<T>,
     private readonly audioKey: StringKey<T>,
     readonly target: string,
+    /** 사람이 읽는 저장 이름 칸. 있으면 서버가 그 이름으로 파일을 둔다. */
+    private readonly nameKey?: OptionalStringKey<T>,
   ) {}
 
   async list(): Promise<T[]> {
@@ -99,6 +102,7 @@ export class ServerRecordStore<T extends Recordable> implements RecordStore<T> {
       id: String(record[this.idKey]),
       createdAt: record.createdAt,
       mimeType: match[1],
+      name: this.nameKey && (record[this.nameKey] as string | undefined),
       fields,
     };
     const res = await fetch(`/api/recordings/${this.store}`, {
@@ -126,8 +130,9 @@ export async function openRecordStore<T extends Recordable>(
   store: RecordingStoreName,
   idKey: StringKey<T>,
   audioKey: StringKey<T>,
+  nameKey?: OptionalStringKey<T>,
 ): Promise<RecordStore<T>> {
   const s = await recordingStatus();
-  if (s.enabled) return new ServerRecordStore<T>(store, idKey, audioKey, s.target ?? '서버');
+  if (s.enabled) return new ServerRecordStore<T>(store, idKey, audioKey, s.target ?? '서버', nameKey);
   return new IndexedDbStore<T>(store, s.reason ? `이 브라우저 (깃허브 저장 꺼짐: ${s.reason})` : '이 브라우저');
 }
