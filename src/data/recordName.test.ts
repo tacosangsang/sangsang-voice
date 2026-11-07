@@ -32,6 +32,17 @@ test('다른 이름의 버전은 무시한다', () => {
     'S01/S01-C001-앵커-차분-v1');
 });
 
+test('버전이 소수면 기존 정수 버전의 다음 번호를 쓴다', () => {
+  const existing = [
+    clip({ recordName: 'S01/S01-C001-앵커-차분-v7.5' }),
+    clip({ recordName: 'S01/S01-C001-앵커-차분-v3' }),
+  ];
+
+  const name = nextRecordName(clip(), [line], speakers, existing);
+
+  assert.equal(name, 'S01/S01-C001-앵커-차분-v4');
+});
+
 for (const suffix of ['문자', '3x'] as const) {
   test(`버전 접두사 뒤가 숫자가 아니면 무시한다: ${suffix}`, () => {
     assert.equal(nextRecordName(clip(), [line], speakers, [clip({ recordName: `S01/S01-C001-앵커-차분-v${suffix}` })]),

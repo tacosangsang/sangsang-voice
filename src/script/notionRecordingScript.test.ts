@@ -71,6 +71,21 @@ test('굵은 화자 문단 없이 시작한 표는 경고하고 건너뛴다', (
   assert.match(parsed.warnings.join(' '), /화자 이름.*없이 시작하는 표/);
 });
 
+test('굵지 않은 공백이 섞여도 굵은 화자 이름을 읽는다', () => {
+  const label: NotionBlock = {
+    ...speaker(),
+    paragraph: { rich_text: [
+      { plain_text: ' \t' },
+      { plain_text: '앵커', annotations: { bold: true } },
+      { plain_text: '\n' },
+    ] },
+  };
+
+  const parsed = parseRecordingScript([heading(), label, table()]);
+
+  assert.deepEqual(parsed.lines.map((line) => line.speaker), ['anchor']);
+});
+
 test('아는 화자는 정해진 식별자로 읽는다', () => {
   const parsed = parseRecordingScript([heading(), speaker(), table()]);
   assert.equal(parsed.lines[0].speaker, SPEAKERS.find((item) => item.name === '앵커')?.id);
