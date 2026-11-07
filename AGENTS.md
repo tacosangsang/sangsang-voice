@@ -36,5 +36,6 @@ PLATING(10분 AI 애니메이션)의 대사 녹음본을 Gemini TTS로 만드는
 
 ## 확인
 - `npx tsc --noEmit`, `npx vite build`
+- `npm test` (node:test, 소스 옆 `*.test.ts`. 새 모듈은 테스트를 같이 둔다)
 - 실행: `.env`에 `GEMINI_API_KEY`(필수), `NOTION_TOKEN`(노션에서 대본 읽기, 없으면 사본)을 넣고 `npm run dev` (기본 포트 3000). 노션 통합에 컷표 페이지를 공유해야 읽힌다.
 - 의존성 설치는 `bun install`(npm은 peer 충돌로 실패한다)
