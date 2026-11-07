@@ -55,10 +55,6 @@ test('모르는 노션 화자는 접두사를 뺀 이름을 쓴다', () => {
   assert.equal(nextRecordName(clip(), [{ ...line, speaker: 'notion:새 화자' }], speakers, []), 'S01/S01-C001-새_화자-차분-v1');
 });
 
-test('컷 번호의 첫 우물정자는 파일 이름에서 빠진다', () => {
-  assert.equal(nextRecordName(clip(), [line], speakers, []).split('/')[0], 'S01');
-});
-
 test('이름의 공백과 경로 구분자와 콜론은 밑줄이 된다', () => {
   assert.equal(nextRecordName(clip({ presetName: '낮은 목/소:리' }), [line], [{ id: 'anchor', name: '새 화/자:명' }], []),
     'S01/S01-C001-새_화_자_명-낮은_목_소_리-v1');

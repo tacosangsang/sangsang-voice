@@ -11,7 +11,6 @@ for (const [label, value, expected] of [
   });
 }
 
-test('상속된 속성 이름도 언어로 통과시키는 현재 동작을 기록한다', () => {
-  // 의심 버그: 지원하지 않는 언어이므로 한국어가 기대되지만 원문이 반환된다.
-  assert.equal(toLanguage('toString'), 'toString');
+test('상속된 속성 이름은 언어로 보지 않는다', { todo: '소스 수정 대기: LANGUAGES에 in 대신 Object.hasOwn' }, () => {
+  assert.equal(toLanguage('toString'), 'ko');
 });

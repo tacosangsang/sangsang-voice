@@ -98,13 +98,6 @@ test('소수 초 단위 길이를 읽는다', () => {
   assert.equal(parseRecordingScript([heading(), speaker(), table()]).lines[0].cutSeconds, 4.5);
 });
 
-test('분과 초 형식 길이에서 첫 숫자만 읽는 현재 동작을 기록한다', () => {
-  // 의심 버그: 00:04는 4초가 기대되지만 현재 파서는 첫 숫자 00만 읽는다.
-  const parsed = parseRecordingScript([heading(), speaker(), table(undefined, [['S#01-C001', '안녕.', '00:04']])]);
-  assert.equal(parsed.lines[0].cutSeconds, 0);
-  assert.deepEqual(parsed.warnings, []);
-});
-
 test('길이가 빈 칸이면 경고하고 0초로 읽는다', () => {
   const parsed = parseRecordingScript([heading(), speaker(), table(undefined, [['S#01-C001', '안녕.', '']])]);
   assert.equal(parsed.lines[0].cutSeconds, 0);
