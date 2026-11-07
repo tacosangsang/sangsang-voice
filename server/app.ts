@@ -1,16 +1,15 @@
 import express from 'express';
 import type { Express } from 'express';
-import type { GoogleGenAI } from '@google/genai';
-import { isWavMime, parsePcmMime, wrapPcm16AsWav } from '../src/shared/wav';
-import { LANGUAGES, toLanguage } from '../src/shared/language';
+import { toLanguage } from '../src/shared/language';
+import { generateDubbing, NoAudioError } from './dubbing';
+import type { GeminiClient } from './dubbing';
 import type { ScriptSource } from '../src/script/source';
 import type { RecordingRepository } from './githubRecordingRepository';
 import { isRecordingStore } from '../src/shared/recording';
 import type { RecordingMeta, RecordingStatus } from '../src/shared/recording';
 
-export type GeminiClient = {
-  readonly models: Pick<GoogleGenAI['models'], 'generateContent'>;
-};
+export type { GeminiClient } from './dubbing';
+export { extractWavAudio } from './dubbing';
 
 export interface AppDependencies {
   readonly notionScript: ScriptSource | undefined;
@@ -82,32 +81,6 @@ export const PRESETS: DubbingPreset[] = [
   },
 ];
 
-
-type GenaiResponse = Awaited<ReturnType<GoogleGenAI['models']['generateContent']>>;
-
-/**
- * TTS 응답의 오디오 조각을 모두 이어 붙이고, raw PCM(audio/L16 등)이면 WAV 헤더를 씌운다.
- * 응답 mimeType을 보지 않고 audio/wav로 붙이면 헤더 없는 PCM이 재생·다운로드되지 않는다.
- */
-export function extractWavAudio(response: GenaiResponse): { base64: string; sourceMimeType: string } | undefined {
-  const parts = (response.candidates?.[0]?.content?.parts ?? []).filter(
-    (p) => p.inlineData?.data && (p.inlineData.mimeType ?? 'audio/').startsWith('audio/')
-  );
-  if (parts.length === 0) return undefined;
-
-  const sourceMimeType = parts[0].inlineData?.mimeType ?? 'audio/L16;rate=24000';
-  const chunks = parts.map((p) => Buffer.from(p.inlineData!.data!, 'base64'));
-
-  if (isWavMime(sourceMimeType)) {
-    if (chunks.length > 1) {
-      console.warn('여러 WAV 조각이 왔지만 첫 조각만 사용합니다.');
-    }
-    return { base64: chunks[0].toString('base64'), sourceMimeType };
-  }
-  const pcm = new Uint8Array(Buffer.concat(chunks));
-  const wav = wrapPcm16AsWav(pcm, parsePcmMime(sourceMimeType));
-  return { base64: Buffer.from(wav).toString('base64'), sourceMimeType };
-}
 
 export function createApp(deps: AppDependencies): Express {
   const { notionScript, bundledScript, recordings, recordingsProblem, getAiClient } = deps;
@@ -274,9 +247,6 @@ export function createApp(deps: AppDependencies): Express {
         return res.status(400).json({ error: '대사가 비어 있습니다.' });
       }
       const language = toLanguage(req.body.language);
-      // 언어 지시는 서버 한 곳에서만 붙인다. 프리셋 지시문에는 언어를 적지 않는다.
-      const styleWithLanguage = `${stylePrompt.trim()} ${LANGUAGES[language].ttsInstruction}`;
-
       const ai = getAiClient();
       if (!ai) {
         return res.status(500).json({
@@ -284,96 +254,22 @@ export function createApp(deps: AppDependencies): Express {
         });
       }
 
-      const primaryModel =
-        modelPreference === 'gemini-3.8-flash-lite-tts'
-          ? 'gemini-3.8-flash-lite-tts'
-          : 'gemini-3.8-flash-tts';
-
-      let audio: ReturnType<typeof extractWavAudio>;
-      let usedModel = primaryModel;
-
-      try {
-        const response = await ai.models.generateContent({
-          model: primaryModel,
-          contents: [
-            {
-              role: 'user',
-              parts: [
-                {
-                  text: cleanText,
-                  speechMetadata: {
-                    style: styleWithLanguage,
-                  },
-                },
-              ],
-            },
-          ],
-          config: {
-            responseModalities: ['AUDIO'],
-            speechConfig: {
-              voiceConfig: {
-                prebuiltVoiceConfig: { voiceName },
-              },
-            },
-          },
-        });
-
-        audio = extractWavAudio(response);
-      } catch (err: any) {
-        console.warn(
-          `Primary TTS (${primaryModel}) failed, attempting fallback to gemini-3.8-flash-lite-tts:`,
-          err.message
-        );
-        // 대체 모델로 재시도
-        if (primaryModel !== 'gemini-3.8-flash-lite-tts') {
-          usedModel = 'gemini-3.8-flash-lite-tts';
-          const fallbackResponse = await ai.models.generateContent({
-            model: 'gemini-3.8-flash-lite-tts',
-            contents: [
-              {
-                role: 'user',
-                parts: [
-                  {
-                    text: cleanText.replace(/<[^>]+>/g, ''), // 경량 모델에서는 발성 태그를 뺀다.
-                    speechMetadata: {
-                      style: styleWithLanguage,
-                    },
-                  },
-                ],
-              },
-            ],
-            config: {
-              responseModalities: ['AUDIO'],
-              speechConfig: {
-                voiceConfig: {
-                  prebuiltVoiceConfig: { voiceName },
-                },
-              },
-            },
-          });
-          audio = extractWavAudio(fallbackResponse);
-        } else {
-          throw err;
-        }
-      }
-
-      if (!audio) {
-        return res.status(502).json({
-          error: '음성 생성 응답에 오디오 데이터가 포함되지 않았습니다.',
-        });
-      }
+      const result = await generateDubbing(ai, { text: cleanText, voiceName, stylePrompt, language, modelPreference });
 
       res.json({
-        audioBase64: audio.base64,
+        audioBase64: result.wavBase64,
         mimeType: 'audio/wav',
-        sourceMimeType: audio.sourceMimeType,
+        sourceMimeType: result.sourceMimeType,
         voiceName,
         language,
-        usedModel,
-        text: cleanText,
+        usedModel: result.usedModel,
+        text: result.text,
         timestamp: Date.now(),
       });
     } catch (error: any) {
+      if (error instanceof NoAudioError) {
+        return res.status(502).json({ error: error.message });
+      }
       console.error('Error generating speech dubbing:', error);
       res.status(500).json({
         error: error.message || '음성 더빙 생성 중 오류가 발생했습니다.',

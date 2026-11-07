@@ -7,7 +7,7 @@ import type { GenerateContentParameters, Part } from '@google/genai';
 import { BundledScriptSource } from '../src/script/bundledSource';
 import type { ScriptSnapshot, ScriptSource } from '../src/script/source';
 import type { RecordingMeta } from '../src/shared/recording';
-import { createApp, extractWavAudio, PRESETS } from './app';
+import { createApp, PRESETS } from './app';
 import type { AppDependencies, GeminiClient } from './app';
 import type { RecordingRepository } from './githubRecordingRepository';
 import { recordingsConfig } from './recordingsConfig';
@@ -502,80 +502,5 @@ describe('녹음 저장소 설정', () => {
     const config = recordingsConfig({ GITHUB_TOKEN: '테스트용 토큰', GITHUB_RECORDINGS_REPO: 'owner/repo', GITHUB_RECORDINGS_BRANCH: 'takes/draft-1' });
     assert.equal(config.problem, undefined);
     assert.equal(config.repo?.target, 'owner/repo@takes/draft-1');
-  });
-});
-
-describe('응답 오디오 추출', () => {
-  afterEach(() => mock.restoreAll());
-
-  test('후보가 없는 응답에서는 오디오를 찾지 못한다', () => {
-    assert.equal(extractWavAudio(new GenerateContentResponse()), undefined);
-  });
-
-  for (const [label, parts] of [
-    ['본문 없음', []], ['글만 있음', [{ text: '음성 없음' }]],
-    ['이미지만 있음', [{ inlineData: { mimeType: 'image/png', data: imageBase64 } }]],
-    ['오디오 데이터가 비어 있음', [{ inlineData: { mimeType: 'audio/wav', data: '' } }]],
-  ] satisfies [string, Part[]][]) {
-    test(`오디오 파트가 없으면 없는 값이다: ${label}`, () => {
-      assert.equal(extractWavAudio(responseWithParts(parts)), undefined);
-    });
-  }
-
-  for (const mimeType of ['audio/wav', 'audio/x-wav']) {
-    test(`WAV 응답은 원본을 그대로 반환한다: ${mimeType}`, () => {
-      const base64 = Buffer.from('RIFF원본').toString('base64');
-      assert.deepEqual(extractWavAudio(responseWithParts([{ inlineData: { mimeType, data: base64 } }])), {
-        base64, sourceMimeType: mimeType,
-      });
-    });
-  }
-
-  test('여러 WAV 조각은 첫 조각만 쓰고 한 번 경고한다', () => {
-    const warning = mock.method(console, 'warn', () => {});
-    const first = Buffer.from('RIFF첫 조각').toString('base64');
-    const second = Buffer.from('RIFF둘째 조각').toString('base64');
-    const result = extractWavAudio(responseWithParts([
-      { inlineData: { mimeType: 'audio/wav', data: first } }, { inlineData: { mimeType: 'audio/wav', data: second } },
-    ]));
-    assert.deepEqual(result, { base64: first, sourceMimeType: 'audio/wav' });
-    assert.equal(warning.mock.callCount(), 1);
-    assert.deepEqual(warning.mock.calls[0].arguments, ['여러 WAV 조각이 왔지만 첫 조각만 사용합니다.']);
-  });
-
-  test('PCM 조각은 순서대로 합쳐 44바이트 WAV 헤더를 붙인다', () => {
-    const first = Buffer.from([0, 0, 255, 127]);
-    const second = Buffer.from([0, 128, 1, 0]);
-    const mimeType = 'audio/L16;rate=48000;channels=2';
-    const result = extractWavAudio(responseWithParts([
-      { text: '끼어든 설명' }, { inlineData: { mimeType, data: first.toString('base64') } },
-      { inlineData: { mimeType: 'image/png', data: imageBase64 } },
-      { inlineData: { mimeType, data: second.toString('base64') } },
-    ]));
-    assert.ok(result);
-    assert.equal(result.sourceMimeType, mimeType);
-    const wav = Buffer.from(result.base64, 'base64');
-    assert.equal(wav.length, 44 + first.length + second.length);
-    assert.equal(wav.toString('ascii', 0, 4), 'RIFF');
-    assert.equal(wav.readUInt32LE(4), 36 + first.length + second.length);
-    assert.equal(wav.toString('ascii', 8, 12), 'WAVE');
-    assert.equal(wav.toString('ascii', 12, 16), 'fmt ');
-    assert.equal(wav.readUInt16LE(20), 1);
-    assert.equal(wav.readUInt16LE(22), 2);
-    assert.equal(wav.readUInt32LE(24), 48000);
-    assert.equal(wav.readUInt16LE(34), 16);
-    assert.equal(wav.toString('ascii', 36, 40), 'data');
-    assert.equal(wav.readUInt32LE(40), first.length + second.length);
-    assert.deepEqual(wav.subarray(44), Buffer.concat([first, second]));
-  });
-
-  test('형식이 없는 오디오 데이터는 기본 PCM 형식으로 감싼다', () => {
-    const result = extractWavAudio(responseWithParts([{ inlineData: { data: pcm.toString('base64') } }]));
-    assert.ok(result);
-    assert.equal(result.sourceMimeType, 'audio/L16;rate=24000');
-    const wav = Buffer.from(result.base64, 'base64');
-    assert.equal(wav.readUInt32LE(24), 24000);
-    assert.equal(wav.readUInt16LE(22), 1);
-    assert.deepEqual(wav.subarray(44), pcm);
   });
 });
