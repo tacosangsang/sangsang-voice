@@ -13,8 +13,11 @@
    "scriptLineId": "S#01-C001",
    "language": "ko",
    "mimeType": "audio/wav",
-   "createdAt": 1794013443056
-  }
+   "createdAt": 1794013443056,
+   "recordName": "S01/S01-C001-앵커-Erinome-v1"
+  },
+  "name": "S01/S01-C001-앵커-Erinome-v1",
+  "path": "clips/S01/S01-C001-앵커-Erinome-v1.wav"
  },
  {
   "id": "audition:anchor|Kore|S#01-C001|Polished state TV newscaster. Polite formal speech, steady even pace, emotionally neutral, quietly propagandistic.|ko",
@@ -30,8 +33,11 @@
    "scriptLineId": "S#01-C001",
    "language": "ko",
    "mimeType": "audio/wav",
-   "createdAt": 1794014577031
-  }
+   "createdAt": 1794014577031,
+   "recordName": "S01/S01-C001-앵커-Kore-v1"
+  },
+  "name": "S01/S01-C001-앵커-Kore-v1",
+  "path": "clips/S01/S01-C001-앵커-Kore-v1.wav"
  },
  {
   "id": "audition:anchor|Autonoe|S#01-C001|Polished state TV newscaster. Polite formal speech, steady even pace, emotionally neutral, quietly propagandistic.|ko",
@@ -47,8 +53,11 @@
    "scriptLineId": "S#01-C001",
    "language": "ko",
    "mimeType": "audio/wav",
-   "createdAt": 1794014591080
-  }
+   "createdAt": 1794014591080,
+   "recordName": "S01/S01-C001-앵커-Autonoe-v1"
+  },
+  "name": "S01/S01-C001-앵커-Autonoe-v1",
+  "path": "clips/S01/S01-C001-앵커-Autonoe-v1.wav"
  },
  {
   "id": "audition:rabbit|Schedar|S#09-C004|Masked servant of the elite. Low, polite and very calm, almost no rise and fall in pitch, unreadable.|ko",
@@ -64,8 +73,11 @@
    "scriptLineId": "S#09-C004",
    "language": "ko",
    "mimeType": "audio/wav",
-   "createdAt": 1794034961889
-  }
+   "createdAt": 1794034961889,
+   "recordName": "S09/S09-C004-토끼-Schedar-v1"
+  },
+  "name": "S09/S09-C004-토끼-Schedar-v1",
+  "path": "clips/S09/S09-C004-토끼-Schedar-v1.wav"
  },
  {
   "id": "audition:rabbit|Algieba|S#09-C004|Masked servant of the elite. Low, polite and very calm, almost no rise and fall in pitch, unreadable.|ko",
@@ -81,8 +93,11 @@
    "scriptLineId": "S#09-C004",
    "language": "ko",
    "mimeType": "audio/wav",
-   "createdAt": 1794034973892
-  }
+   "createdAt": 1794034973892,
+   "recordName": "S09/S09-C004-토끼-Algieba-v1"
+  },
+  "name": "S09/S09-C004-토끼-Algieba-v1",
+  "path": "clips/S09/S09-C004-토끼-Algieba-v1.wav"
  },
  {
   "id": "audition:rabbit|Enceladus|S#09-C004|Masked servant of the elite. Low, polite and very calm, almost no rise and fall in pitch, unreadable.|ko",
@@ -98,7 +113,10 @@
    "scriptLineId": "S#09-C004",
    "language": "ko",
    "mimeType": "audio/wav",
-   "createdAt": 1794034986568
-  }
+   "createdAt": 1794034986568,
+   "recordName": "S09/S09-C004-토끼-Enceladus-v1"
+  },
+  "name": "S09/S09-C004-토끼-Enceladus-v1",
+  "path": "clips/S09/S09-C004-토끼-Enceladus-v1.wav"
  }
 ]
