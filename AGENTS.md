@@ -54,3 +54,10 @@ npm run dub -- --voice Kore --scene "S#01" --dry-run
 실제 생성에는 `GEMINI_API_KEY`가 필요하며 `--dry-run`은 생성 없이 대상과 저장 이름만 출력한다. `--source notion`은 `NOTION_TOKEN`과 선택 값 `NOTION_SCRIPT_PAGE_ID`를 쓴다.
 
 CLI는 줄 단위로만 생성한다. 묶음 생성·무음 자르기는 브라우저 API를 사용하므로 브라우저에서만 가능하다.
+
+녹음 전에 대본 경고·컷 길이 초과 예측·빠진 대사를 점검한다(기본 사본은 키 없이 동작하며, `--strict`는 문제가 있으면 종료 코드 1).
+
+```sh
+npm run script:lint
+npm run script:lint -- --source notion --strict
+```
