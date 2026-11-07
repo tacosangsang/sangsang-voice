@@ -5,6 +5,7 @@ PLATING(10분 AI 애니메이션)의 대사 녹음본을 Gemini TTS로 만드는
 ## 구조
 - `server.ts`: 환경 변수로 의존을 만들고 Vite·정적 파일·서버 시작을 맡는다. `server/app.ts`의 `createApp(deps)`가 모든 API 라우트를 등록한다. `server/recordingsConfig.ts`는 전달받은 환경 값으로 녹음 저장소 설정을 만든다.
 - `server/dubbing.ts`: `generateDubbing(ai, request)`가 언어 지시·TTS 모델 선택·경량 모델 재시도·WAV 변환을 맡는다. 음성 없는 응답은 `NoAudioError`로 구분한다.
+- `server/cli/`: `npm run dub` 진입점과 인자 해석, 대본 줄 선택·생성·판정 표, `FileStore` 인터페이스와 폴더 저장 구현. 기존 TTS·저장 이름 규칙을 재사용한다.
 - `src/shared/wav.ts`: 서버·브라우저 공용 WAV 유틸(raw PCM에 헤더 씌우기, float 채널 인코딩).
 - `src/audio/effects.ts`: `AudioEffect` 인터페이스와 잔향·드론 구현. 실시간 재생과 내보내기가 같은 정의를 쓴다. 새 효과는 이 인터페이스를 구현한다.
 - `src/audio/offlineRender.ts`: OfflineAudioContext로 효과를 입혀 WAV를 만든다("효과 포함 WAV" 버튼).
@@ -40,3 +41,16 @@ PLATING(10분 AI 애니메이션)의 대사 녹음본을 Gemini TTS로 만드는
 - `npm test` (node:test, 소스 옆 `*.test.ts`. 새 모듈은 테스트를 같이 둔다)
 - 실행: `.env`에 `GEMINI_API_KEY`(필수), `NOTION_TOKEN`(노션에서 대본 읽기, 없으면 사본)을 넣고 `npm run dev` (기본 포트 3000). 노션 통합에 컷표 페이지를 공유해야 읽힌다.
 - 의존성 설치는 `bun install`(npm은 peer 충돌로 실패한다)
+
+## 자동화
+터미널에서 대본 줄을 골라 WAV 파일로 저장한다. 기본 출처는 저장소 사본, 저장 폴더는 `out`이다.
+
+```sh
+npm run dub -- --voice Kore
+npm run dub -- --voice Kore --style "Read calmly." --scene "S#01"
+npm run dub -- --voice Kore --scene "S#01" --dry-run
+```
+
+실제 생성에는 `GEMINI_API_KEY`가 필요하며 `--dry-run`은 생성 없이 대상과 저장 이름만 출력한다. `--source notion`은 `NOTION_TOKEN`과 선택 값 `NOTION_SCRIPT_PAGE_ID`를 쓴다.
+
+CLI는 줄 단위로만 생성한다. 묶음 생성·무음 자르기는 브라우저 API를 사용하므로 브라우저에서만 가능하다.
