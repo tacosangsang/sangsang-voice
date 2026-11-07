@@ -22,6 +22,9 @@ export function buildImpulseResponse(ctx: BaseAudioContext, duration: number, de
 
 export const REVERB_TAIL_SEC = 2.5;
 
+/** 처음 켤 때 잔향 양. 녹음본은 원음이 기본이고, 잔향은 필요할 때 슬라이더로 올린다. */
+export const DEFAULT_REVERB = 0;
+
 /** 원음(dry)은 그대로 두고 잔향(wet)만 amount 비율로 더한다. 실시간 엔진의 setReverb와 같은 계수. */
 export class ReverbEffect implements AudioEffect {
   readonly id = 'reverb';

@@ -11,6 +11,7 @@ import { VoiceAuditionModal } from './components/VoiceAuditionModal';
 import { DubbingPreset, DubbingItem, SceneItem } from './types';
 import { DEFAULT_SCENES } from './data/defaultScenes';
 import { audioEngine } from './utils/audioEngine';
+import { DEFAULT_REVERB } from './audio/effects';
 import { DialogueLanguage } from './shared/language';
 import { IndexedDbStore, openRecordStore } from './storage/recordStore';
 import { LegacyTake, clipFromLegacyTake } from './data/auditionClip';
@@ -114,7 +115,7 @@ export default function App() {
   const [activeSceneId, setActiveSceneId] = useState<string>(DEFAULT_SCENES[0].id);
 
   // Audio Filters
-  const [reverbAmount, setReverbAmount] = useState<number>(0.35);
+  const [reverbAmount, setReverbAmount] = useState<number>(DEFAULT_REVERB);
   const [playbackRate, setPlaybackRate] = useState<number>(1.0);
   const [atmosphereDrone, setAtmosphereDrone] = useState<boolean>(false);
   const [frequencyLevel, setFrequencyLevel] = useState<number>(0);

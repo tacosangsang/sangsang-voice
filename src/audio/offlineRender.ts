@@ -4,7 +4,8 @@ import { AudioFilterSettings } from '../types';
 
 /** 화면의 효과 설정을 내보내기용 효과 목록으로 바꾼다. 재생 속도는 포함하지 않는다(아래 주석). */
 export function effectsFromSettings(settings: Pick<AudioFilterSettings, 'reverb' | 'darkDrone'>): AudioEffect[] {
-  const effects: AudioEffect[] = [new ReverbEffect(settings.reverb)];
+  // 잔향 0은 효과 없음으로 둔다. 넣으면 꼬리 2.5초가 붙어 컷 길이가 늘어난다.
+  const effects: AudioEffect[] = settings.reverb > 0 ? [new ReverbEffect(settings.reverb)] : [];
   if (settings.darkDrone) effects.push(new DroneEffect());
   return effects;
 }

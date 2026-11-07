@@ -1,4 +1,4 @@
-import { buildImpulseResponse, REVERB_TAIL_SEC } from '../audio/effects';
+import { buildImpulseResponse, DEFAULT_REVERB, REVERB_TAIL_SEC } from '../audio/effects';
 
 // 실시간 재생 엔진. 내보내기는 src/audio/offlineRender.ts가 같은 효과 정의(src/audio/effects.ts)로 렌더한다.
 export class CinematicAudioEngine {
@@ -57,7 +57,7 @@ export class CinematicAudioEngine {
     this.analyserNode.connect(this.masterGain);
     this.masterGain.connect(this.ctx.destination);
 
-    this.setReverb(0.35); // Default subtle cinematic room reverb
+    this.setReverb(DEFAULT_REVERB);
   }
 
   public resume() {

@@ -28,7 +28,7 @@ PLATING(10분 AI 애니메이션)의 대사 녹음본을 Gemini TTS로 만드는
 
 ## 알려진 한계 (다음 작업 후보)
 - 재생 속도는 내보내기에 들어가지 않는다. 브라우저 재생은 음높이를 유지하지만 Web Audio playbackRate는 음높이가 바뀌기 때문. 넣으려면 타임 스트레치(예: SoundTouch 계열)가 필요하다.
-- "효과 포함 WAV"는 잔향 꼬리 2.5초가 붙어 컷 길이보다 길다. 컷 길이 비교는 원본 기준이다.
+- 잔향은 기본 0(`DEFAULT_REVERB`, 실시간 엔진과 화면이 함께 쓴다). 슬라이더로 올리면 "효과 포함 WAV"에 잔향 꼬리 2.5초가 붙어 컷 길이보다 길어진다. 컷 길이 비교는 원본 기준이다. 생성 음성(저장·"원본 WAV")에는 원래 효과가 들어가지 않는다.
 - 화자별 기본 목소리·연기 지시문이 정해지지 않았다. 지금 프리셋 4개는 토끼용 시안이다.
 - 기본 씬(`src/data/defaultScenes.ts`)은 대사 있는 8개 씬이고 그림이 아직 없다.
 - 생성 클립(목소리 비교 음성 포함, `auditionKey`로 구분)은 `GITHUB_TOKEN`이 있으면 깃허브 `recordings` 브랜치(`server/githubRecordingRepository.ts`, `clips/index.json` + `<id 해시>.wav`)에, 없거나 저장소에 닿지 못하면 그 브라우저 IndexedDB에 남는다(`src/storage/recordStore.ts`). 꺼진 이유는 `/api/recordings/status`의 `reason`으로 "저장된 음성" 머리에 보인다(환경 변수 값은 되풀이하지 않는다). `GITHUB_RECORDINGS_REPO`·`GITHUB_RECORDINGS_BRANCH`는 기본값을 바꿀 때만 넣고 `.env.example`에 칸을 두지 않는다(AI Studio가 칸마다 Secret 입력을 띄워 토큰을 잘못 넣은 일이 있었다). 깃허브 저장이 켜진 뒤 앱을 열면 그 브라우저에만 있던 클립을 하나씩 깃허브로 옮긴다(브라우저 사본은 지우지 않는다). index.json이 1MB를 넘으면 Contents API로 못 읽으니(클립 약 2000개) 그때는 나눠야 한다. 커스텀 씬 이미지는 localStorage(용량 약 5MB)에 base64로 저장된다.
