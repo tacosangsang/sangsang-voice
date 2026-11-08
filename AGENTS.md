@@ -54,9 +54,14 @@ npm run dub -- --voice Kore --speaker anchor
 npm run dub -- --voice Kore --speaker anchor --style "Read calmly." --scene "S#01"
 npm run dub -- --voice Kore --speaker anchor --scene "S#01" --dry-run
 npm run dub -- --voice Kore --speaker anchor --scene "S#01" --batch
+npm run dub -- --voice Kore --speaker anchor --scene "S#01" --no-upload
 ```
 
+CLI는 실행하는 PC의 `.env`에 `GITHUB_TOKEN`이 있으면 로컬 `out/` 저장 뒤 앱과 같은 깃허브 `recordings` 브랜치에도 저장하며, 앱의 "저장된 음성" 목록에 그대로 보인다. 토큰에는 대상 저장소 Contents 읽기·쓰기 권한이 필요하고 브랜치가 미리 있어야 한다. 앱 서버의 토큰만으로 PC의 CLI가 저장할 수는 없다. `--no-upload`는 깃허브 확인·목록 읽기·업로드를 모두 끈다. `--out`은 로컬 위치만 바꾼다.
+실행 시작에 접속 확인 한 번과 기존 목록 읽기를 한다. 토큰·설정·접속·목록 읽기 문제는 이유를 표시하고 로컬 생성만 계속한다. 켜져 있으면 로컬과 깃허브 이름의 합집합으로 버전과 건너뜀을 판단한다. 로컬 저장 후 업로드 실패는 경고와 판정 "깃허브 저장 실패", 종료 코드 2를 남기며 로컬 파일과 다음 줄 처리를 유지한다. 업로드만 재시도하는 기능은 없다. `--dry-run`도 접속 확인·목록 읽기는 하며 업로드는 하지 않고, 첫 줄에 저장 대상 또는 꺼진 이유를 출력한다. 설정 값은 출력하지 않는다.
+
 `--batch`는 같은 씬·화자·감정으로 이어지는 줄을 한 번에 생성해 무음에서 자른다. 감정 칸이 비면 묶이지 않는다. `--batch --dry-run`은 묶음 id·줄 수·호출 예정 횟수를 표 앞에 출력한다. 일부 줄만 저장되어 있으면 전체를 다시 생성하고 기존 파일은 다음 버전으로 보존한다. 자르기 실패 원본은 첫 줄 이름에 `-batch`를 붙여 별도 버전으로 저장하고 종료 코드 2를 반환한다. 실제 Gemini 음성으로 자르기는 아직 검증하지 않았다.
+깃허브 저장이 켜져 있으면 분할 컷과 통째 저장 원본 모두 업로드한다. 통째 저장 원본은 `scriptLineId` 없이 명시한 `recordName`으로 올려 `기타/`가 아닌 첫 줄의 씬 폴더에 둔다.
 
 녹음 전 대본 점검:
 
