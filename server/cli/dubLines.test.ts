@@ -153,6 +153,26 @@ test('이미 있는 파일은 생성 없이 건너뛰고 force는 다음 버전�
   assert.ok(store.files.has('S01/S01-C001-앵커-Kore-v4.wav'));
 });
 
+for (const force of [false, true]) {
+  test(`한 실행에서 같은 저장 이름이 반복되면 force=${force}에 따라 건너뛰거나 버전을 올린다`, async () => {
+    const repeated: ScriptSource = { origin: 'bundled', async load() {
+      return { origin: 'bundled', lines: [first, { ...first }], speakers, loadedAt: 0, warnings: [] };
+    } };
+    const store = new MemoryFileStore();
+    const { ai, calls } = fakeAi();
+    const report = await dubLines(repeated, store, ai, { ...options, force });
+    const firstName = 'S01/S01-C001-앵커-Kore-v1';
+    const secondName = 'S01/S01-C001-앵커-Kore-v2';
+    assert.deepEqual(report.rows.map((row) => ({ status: row.status, recordName: row.recordName })), [
+      { status: 'generated', recordName: firstName },
+      { status: force ? 'generated' : 'skipped', recordName: force ? secondName : firstName },
+    ]);
+    assert.equal(calls.length, force ? 2 : 1);
+    assert.deepEqual([...store.files.keys()], force ? [`${firstName}.wav`, `${secondName}.wav`] : [`${firstName}.wav`]);
+    assert.equal(report.exitCode, 0);
+  });
+}
+
 test('영어 대사가 없으면 경고하고 다음 줄은 영어로 생성한다', async () => {
   const missing: ScriptSource = {
     origin: 'bundled', async load() {
