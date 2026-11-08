@@ -2,6 +2,8 @@
 
 PLATING(10분 AI 애니메이션)의 대사 녹음본을 Gemini TTS로 만드는 도구. 답변과 주석은 한국어, 이모지 금지.
 
+사용법은 [README.md](README.md), Claude 스킬은 [.claude/skills/sangsang-voice/SKILL.md](.claude/skills/sangsang-voice/SKILL.md)를 참고한다.
+
 ## 구조
 - `server.ts`: 환경 변수로 의존을 만들고 Vite·정적 파일·서버 시작을 맡는다. `server/app.ts`의 `createApp(deps)`가 모든 API 라우트를 등록한다. `server/recordingsConfig.ts`는 전달받은 환경 값으로 녹음 저장소 설정을 만든다.
 - `server/dubbing.ts`: `generateDubbing(ai, request)`가 언어 지시·TTS 모델 선택·경량 모델 재시도·WAV 변환을 맡는다. 음성 없는 응답은 `NoAudioError`로 구분한다.
@@ -37,13 +39,15 @@ PLATING(10분 AI 애니메이션)의 대사 녹음본을 Gemini TTS로 만드는
 - 사용 모델 이름(`gemini-3.8-flash-tts` 등)과 응답 오디오 형식은 실제 키로 확인하지 않았다. `sourceMimeType`이 응답에 함께 오니 첫 실행 때 확인한다.
 
 ## 확인
-- `npx tsc --noEmit`, `npx vite build`
+- `npm run lint`, `npm run build`
 - `npm test` (node:test, 소스 옆 `*.test.ts`. 새 모듈은 테스트를 같이 둔다)
 - 실행: `.env`에 `GEMINI_API_KEY`(필수), `NOTION_TOKEN`(노션에서 대본 읽기, 없으면 사본)을 넣고 `npm run dev` (기본 포트 3000). 노션 통합에 컷표 페이지를 공유해야 읽힌다.
 - 의존성 설치는 `bun install`(npm은 peer 충돌로 실패한다)
 
 ## 자동화
-터미널에서 대본 줄을 골라 WAV 파일로 저장한다. 기본 출처는 저장소 사본, 저장 폴더는 `out`이다.
+인자·환경 변수·저장 이름·종료 코드·한계는 [README.md의 터미널 자동화](README.md#터미널-자동화)를 참고한다.
+
+줄 단위 음성 생성:
 
 ```sh
 npm run dub -- --voice Kore
@@ -51,11 +55,7 @@ npm run dub -- --voice Kore --style "Read calmly." --scene "S#01"
 npm run dub -- --voice Kore --scene "S#01" --dry-run
 ```
 
-실제 생성에는 `GEMINI_API_KEY`가 필요하며 `--dry-run`은 생성 없이 대상과 저장 이름만 출력한다. `--source notion`은 `NOTION_TOKEN`과 선택 값 `NOTION_SCRIPT_PAGE_ID`를 쓴다.
-
-CLI는 줄 단위로만 생성한다. 묶음 생성·무음 자르기는 브라우저 API를 사용하므로 브라우저에서만 가능하다.
-
-녹음 전에 대본 경고·컷 길이 초과 예측·빠진 대사를 점검한다(기본 사본은 키 없이 동작하며, `--strict`는 문제가 있으면 종료 코드 1).
+녹음 전 대본 점검:
 
 ```sh
 npm run script:lint
