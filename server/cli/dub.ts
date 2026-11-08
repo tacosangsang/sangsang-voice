@@ -3,13 +3,14 @@ import { GoogleGenAI } from '@google/genai';
 import { BundledScriptSource } from '../../src/script/bundledSource';
 import type { ScriptSource } from '../../src/script/source';
 import { DEFAULT_SCRIPT_PAGE_ID, NotionScriptSource } from '../notionScriptSource';
+import { recordingsConfig } from '../recordingsConfig';
 import { CliArgumentError, parseDubArgs } from './dubArgs';
 import { dubLines, formatDubTable } from './dubLines';
 import { formatBatchPlan } from './dubBatch';
 import { DirFileStore } from './fileStore';
 
 // 외부 API 오류에 설정 값이 들어 있어도 터미널에는 노출하지 않는다.
-const configuredValues = [process.env.GEMINI_API_KEY, process.env.NOTION_TOKEN, process.env.NOTION_SCRIPT_PAGE_ID]
+const configuredValues = [process.env.GEMINI_API_KEY, process.env.NOTION_TOKEN, process.env.NOTION_SCRIPT_PAGE_ID, process.env.GITHUB_TOKEN]
   .filter((value): value is string => Boolean(value));
 const redact = (message: string) => configuredValues.reduce((text, value) =>
   text.replaceAll(value, '[설정값 숨김]'), message);
@@ -35,7 +36,11 @@ try {
   const ai = options.dryRun ? undefined : new GoogleGenAI({
     apiKey, httpOptions: { headers: { 'User-Agent': 'aistudio-build' } },
   });
-  const report = await dubLines(source, new DirFileStore(options.out), ai, options);
+  const recordings: ReturnType<typeof recordingsConfig> = options.noUpload ? {} : recordingsConfig(process.env);
+  const report = await dubLines(source, new DirFileStore(options.out), ai, options, recordings.repo, recordings.problem);
+  console.log(redact(report.recordingStatus.enabled
+    ? `깃허브 저장: ${report.recordingStatus.target}`
+    : `깃허브 저장 꺼짐: ${report.recordingStatus.reason}`));
   for (const warning of report.warnings) console.error(redact(`경고: ${warning}`));
   if (options.batch && options.dryRun) console.log(redact(formatBatchPlan(report.batches)));
   console.log(redact(formatDubTable(report.rows)));

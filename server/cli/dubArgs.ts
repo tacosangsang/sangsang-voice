@@ -18,6 +18,7 @@ export type DubOptions = LineSelection & {
   readonly force: boolean;
   readonly dryRun: boolean;
   readonly batch: boolean;
+  readonly noUpload: boolean;
 };
 
 export class CliArgumentError extends Error {
@@ -37,6 +38,7 @@ const ARGUMENT_OPTIONS = {
   force: { type: 'boolean', default: false },
   'dry-run': { type: 'boolean', default: false },
   batch: { type: 'boolean', default: false },
+  'no-upload': { type: 'boolean', default: false },
 } as const;
 
 export function parseDubArgs(args: string[]): DubOptions {
@@ -71,5 +73,6 @@ export function parseDubArgs(args: string[]): DubOptions {
     source: values.source, scenes, cuts, speakers, voiceName: values.voice.trim(),
     stylePrompt: values.style, language: values.lang, modelPreference: values['model-preference'],
     out: values.out, force: values.force, dryRun: values['dry-run'], batch: values.batch,
+    noUpload: values['no-upload'],
   };
 }

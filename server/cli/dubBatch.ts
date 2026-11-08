@@ -15,11 +15,15 @@ export type BatchPlan = {
   readonly calls: 0 | 1;
 };
 
-export type BatchAudioResult =
+export type BatchAudioResult = {
+  readonly texts: readonly string[];
+  readonly stylePrompt: string;
+} & (
   | { readonly kind: 'split'; readonly segments: readonly {
     readonly bytes: Uint8Array; readonly audioSeconds: number; readonly suspicious: boolean;
   }[] }
-  | { readonly kind: 'whole'; readonly bytes: Uint8Array; readonly reason: string };
+  | { readonly kind: 'whole'; readonly bytes: Uint8Array; readonly reason: string }
+);
 
 export function planDubGroups(lines: ScriptLine[], options: DubOptions): ScriptLineGroup[] {
   const single = (line: ScriptLine): ScriptLineGroup => ({
@@ -58,13 +62,13 @@ export async function generateBatch(
     const samples = channels[0];
     const ranges = findLineRanges(samples, sampleRate, texts.length);
     const suspicious = suspiciousRanges(ranges, texts.map((text) => text.length));
-    return { kind: 'split', segments: ranges.map(({ start, end }, index) => ({
+    return { kind: 'split', texts, stylePrompt: request.stylePrompt, segments: ranges.map(({ start, end }, index) => ({
       bytes: encodeFloatChannelsToWav([samples.slice(start, end)], sampleRate),
       audioSeconds: (end - start) / sampleRate, suspicious: suspicious.includes(index),
     })) };
   } catch (error) {
     // 생성에 쓴 호출을 낭비하지 않도록 자르지 못한 원본도 보존한다.
-    if (error instanceof Error) return { kind: 'whole', bytes, reason: error.message };
+    if (error instanceof Error) return { kind: 'whole', bytes, reason: error.message, texts, stylePrompt: request.stylePrompt };
     throw error;
   }
 }

@@ -3,17 +3,21 @@ import type { ScriptLine, Speaker } from '../../src/data/platingScript';
 import { nextRecordName } from '../../src/data/recordName';
 import type { ScriptSource } from '../../src/script/source';
 import type { DubbingItem } from '../../src/types';
+import type { RecordingStatus } from '../../src/shared/recording';
 import { generateDubbing } from '../dubbing';
 import type { GeminiClient } from '../dubbing';
+import type { RecordingRepository } from '../githubRecordingRepository';
 import { CliArgumentError } from './dubArgs';
 import type { DubOptions, LineSelection } from './dubArgs';
 import { generateBatch, nextBatchName, planDubGroups } from './dubBatch';
 import type { BatchPlan } from './dubBatch';
 import type { FileStore } from './fileStore';
+import { prepareRecordings, uploadClip } from './dubRecordings';
 
 export type DubRow = {
   readonly line: ScriptLine;
   readonly recordName: string;
+  readonly uploadFailed?: boolean;
 } & (
   | { readonly status: 'generated'; readonly audioSeconds: number; readonly suspicious?: boolean }
   | { readonly status: 'unsplit'; readonly audioSeconds: number; readonly reason: string }
@@ -25,6 +29,7 @@ export type DubReport = {
   readonly rows: readonly DubRow[];
   readonly warnings: readonly string[];
   readonly batches: readonly BatchPlan[];
+  readonly recordingStatus: RecordingStatus;
   readonly exitCode: 0 | 2;
 };
 
@@ -86,6 +91,7 @@ export function wavDurationSeconds(bytes: Uint8Array): number {
 
 export async function dubLines(
   source: ScriptSource, store: FileStore, ai: GeminiClient | undefined, options: DubOptions,
+  repository?: RecordingRepository, recordingsProblem?: string,
 ): Promise<DubReport> {
   const snapshot = await source.load();
   const selectedLines = selectLines(snapshot.lines, options);
@@ -93,10 +99,12 @@ export async function dubLines(
   if (selectedSpeakerIds.length > 1) {
     throw new CliArgumentError(`선택된 줄에 화자가 ${selectedSpeakerIds.length}명입니다(${selectedSpeakerIds.join(', ')}). --speaker로 한 화자만 고르세요.`);
   }
-  const names = recordNamesFromPaths(await store.list());
-  const warnings = [...snapshot.warnings];
+  const recordings = await prepareRecordings(repository, options.noUpload, recordingsProblem);
+  const names = [...new Set([...recordNamesFromPaths(await store.list()), ...recordings.names])];
+  const warnings = [...snapshot.warnings, ...recordings.warnings];
   const rows: DubRow[] = [];
   const batches: BatchPlan[] = [];
+  let lastCreatedAt = 0;
   for (const group of planDubGroups(selectedLines, options)) {
     const plans = group.lines.map((line) => planLine(line, snapshot.speakers, options, names));
     const allExist = plans.every((plan) => plan.skipExisting);
@@ -123,6 +131,8 @@ export async function dubLines(
       try {
         if (!ai) throw new CliArgumentError('Gemini 클라이언트가 없습니다.');
         const audio = await generateBatch(ai, group, options);
+        const createdAt = Math.max(Date.now(), lastCreatedAt + 1);
+        lastCreatedAt = createdAt;
         switch (audio.kind) {
           case 'whole': {
             const line = group.lines[0];
@@ -130,7 +140,12 @@ export async function dubLines(
             const audioSeconds = wavDurationSeconds(audio.bytes);
             await store.write(`${recordName}.wav`, audio.bytes);
             names.push(recordName);
-            rows.push({ line, recordName, status: 'unsplit', audioSeconds,
+            const uploadFailed = await uploadClip(recordings.repository, {
+              id: `cli-batch-${createdAt}-0`, presetName: `묶음 ${group.id} ${options.voiceName} (자르기 실패)`,
+              voiceName: options.voiceName, text: audio.texts.join('\n\n'), stylePrompt: audio.stylePrompt,
+              duration: audioSeconds, language: options.language, mimeType: 'audio/wav', recordName, createdAt,
+            }, audio.bytes, warnings);
+            rows.push({ line, recordName, status: 'unsplit', audioSeconds, uploadFailed,
               reason: `${group.id}: ${audio.reason}` });
             break;
           }
@@ -141,8 +156,14 @@ export async function dubLines(
               try {
                 await store.write(`${recordName}.wav`, segment.bytes);
                 names.push(recordName);
+                const uploadFailed = await uploadClip(recordings.repository, {
+                  id: `cli-batch-${createdAt}-${index}`, presetName: `${line.cut} ${options.voiceName} (묶음)`,
+                  voiceName: options.voiceName, text: audio.texts[index], stylePrompt: audio.stylePrompt,
+                  duration: segment.audioSeconds, scriptLineId: line.id, language: options.language,
+                  mimeType: 'audio/wav', recordName, createdAt: createdAt - index,
+                }, segment.bytes, warnings);
                 rows.push({ line, recordName, status: 'generated', audioSeconds: segment.audioSeconds,
-                  suspicious: segment.suspicious });
+                  suspicious: segment.suspicious, uploadFailed });
               } catch (error) {
                 rows.push({ line, recordName, status: 'failed', reason: error instanceof Error ? error.message : '알 수 없는 저장 오류' });
               }
@@ -185,20 +206,29 @@ export async function dubLines(
         rows.push({ line, recordName, status: 'failed', reason: 'Gemini 클라이언트가 없습니다.' });
         continue;
       }
+      const stylePrompt = [options.stylePrompt.trim(), line.direction?.trim()].filter(Boolean).join(' ');
       const result = await generateDubbing(ai, {
         text, voiceName: options.voiceName, language: options.language, modelPreference: options.modelPreference,
-        stylePrompt: [options.stylePrompt.trim(), line.direction?.trim()].filter(Boolean).join(' '),
+        stylePrompt,
       });
       const bytes = Buffer.from(result.wavBase64, 'base64');
       const audioSeconds = wavDurationSeconds(bytes);
       await store.write(`${recordName}.wav`, bytes);
       names.push(recordName);
-      rows.push({ line, recordName, status: 'generated', audioSeconds });
+      const createdAt = Math.max(Date.now(), lastCreatedAt + 1);
+      lastCreatedAt = createdAt;
+      const uploadFailed = await uploadClip(recordings.repository, {
+        id: `cli-${createdAt}`, presetName: `${line.cut} ${options.voiceName}`, voiceName: options.voiceName,
+        text, stylePrompt, duration: audioSeconds, scriptLineId: line.id, language: options.language,
+        mimeType: 'audio/wav', recordName, createdAt,
+      }, bytes, warnings);
+      rows.push({ line, recordName, status: 'generated', audioSeconds, uploadFailed });
     } catch (error) {
       rows.push({ line, recordName, status: 'failed', reason: error instanceof Error ? error.message : '알 수 없는 생성 오류' });
     }
   }
-  return { rows, warnings, batches, exitCode: rows.some((row) => row.status === 'failed' || row.status === 'unsplit') ? 2 : 0 };
+  return { rows, warnings, batches, recordingStatus: recordings.status,
+    exitCode: rows.some((row) => row.status === 'failed' || row.status === 'unsplit' || row.uploadFailed) ? 2 : 0 };
 }
 
 export function formatDubTable(rows: readonly DubRow[]): string {
@@ -223,6 +253,7 @@ export function formatDubTable(rows: readonly DubRow[]): string {
         throw new TypeError(`알 수 없는 처리 결과: ${unreachable}`);
       }
     }
+    if (row.uploadFailed) verdict += ' · 깃허브 저장 실패';
     output.push([row.line.cut, `${row.recordName}.wav`, seconds, row.line.cutSeconds.toFixed(1), verdict]
       .map((cell) => cell.replace(/[\r\n|]+/g, ' ')).join(' | '));
   }
