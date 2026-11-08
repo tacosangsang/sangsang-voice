@@ -64,6 +64,7 @@ export function parseDubArgs(args: string[]): DubOptions {
   if ([...scenes, ...cuts, ...speakers, values.out, values['model-preference'] ?? '기본'].some((s) => !s.trim())) {
     throw new CliArgumentError('씬·컷·화자·출력 폴더·모델 이름은 빈 값일 수 없습니다.');
   }
+  if (speakers.length > 1) throw new CliArgumentError('--speaker는 한 화자만 지정하세요.');
   return {
     source: values.source, scenes, cuts, speakers, voiceName: values.voice.trim(),
     stylePrompt: values.style, language: values.lang, modelPreference: values['model-preference'],

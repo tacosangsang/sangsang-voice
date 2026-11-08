@@ -16,13 +16,14 @@ description: PLATING 대사 녹음 도구. 대본 점검(script:lint), 음성 �
 | --- | --- |
 | 대본 점검·컷 길이 넘치는 줄 | `npm run script:lint` |
 | 노션 대본을 엄격하게 점검 | `npm run script:lint -- --source notion --strict` |
-| 특정 씬 음성 생성 | 확인 후 `npm run dub -- --voice Kore --scene "S#01"` |
-| 영어 음성 | `npm run dub -- --voice Kore --source notion --scene "S#01" --lang en --dry-run`으로 먼저 확인 |
-| dry-run 먼저 | `npm run dub -- --voice Kore --scene "S#01" --dry-run` |
+| 특정 씬 음성 생성 | 확인 후 `npm run dub -- --voice Kore --speaker anchor --scene "S#01"` |
+| 영어 음성 | `npm run dub -- --voice Kore --speaker anchor --source notion --scene "S#01" --lang en --dry-run`으로 먼저 확인 |
+| dry-run 먼저 | `npm run dub -- --voice Kore --speaker anchor --scene "S#01" --dry-run` |
 | 테스트·타입·빌드 | 요청 범위에 따라 `npm test`, `npm run lint`, `npm run build` |
 
 CLI의 기본 출처는 저장소 사본이다. 정본 점검을 요청받으면 `--source notion`을 쓴다. 노션 읽기 실패를 사본 결과로 바꿔 보고하지 않는다.
-점검 결과를 JSON으로 원하면 `--json`, 정상 줄도 포함하려면 `--all`을 붙인다. 씬·컷·화자 필터는 두 CLI에서 동일하다.
+점검 결과를 JSON으로 원하면 `--json`, 정상 줄도 포함하려면 `--all`을 붙인다. 씬·컷 필터는 두 CLI에서 동일하다.
+한 목소리는 한 화자만 사용하므로 음성 생성의 `--speaker`는 한 명만 지정하며, 선택된 줄에 화자가 둘 이상이면 `--dry-run`도 종료 코드 1로 거절한다.
 영어는 사용자가 확정한 문장이 노션의 영어 대사 칸에 있는지 먼저 확인한다. 사본에 `textEn`이 있어도 정본 승인 여부를 추정하지 않는다. 영어 대사가 없으면 번역을 만들지 말고 사용자에게 확정을 요청한다.
 
 ## 실행 전 확인

@@ -6,7 +6,7 @@ import type { ScriptLine } from '../../src/data/platingScript';
 import type { ScriptSource } from '../../src/script/source';
 import { wrapPcm16AsWav } from '../../src/shared/wav';
 import type { GeminiClient } from '../dubbing';
-import { parseDubArgs } from './dubArgs';
+import { CliArgumentError, parseDubArgs } from './dubArgs';
 import { dubLines, formatDubTable, planLine, recordNamesFromPaths, selectLines, wavDurationSeconds } from './dubLines';
 import type { FileStore } from './fileStore';
 
@@ -67,6 +67,38 @@ test('화자는 id로 고르고 다른 필터와 AND다', () => {
     ...options, scenes: ['S#01'], cuts: [first.cut, second.cut], speakers: ['rabbit'],
   }), [second]);
   assert.deepEqual(selectLines(lines, { ...options, scenes: ['S#05'], speakers: ['rabbit'] }), []);
+});
+
+for (const dryRun of [false, true]) {
+  test(`화자가 두 명이면 dryRun=${dryRun}에서 오류를 내고 생성하지 않는다`, async () => {
+    const store = new MemoryFileStore();
+    const { ai, calls } = fakeAi();
+    await assert.rejects(dubLines(source, store, ai, { ...options, dryRun }), (error) =>
+      error instanceof CliArgumentError && error.message ===
+        '선택된 줄에 화자가 2명입니다(anchor, rabbit). --speaker로 한 화자만 고르세요.');
+    assert.equal(calls.length, 0);
+    assert.equal(store.files.size, 0);
+  });
+}
+
+test('한 화자를 고르면 해당 화자의 모든 줄을 생성한다', async () => {
+  const store = new MemoryFileStore();
+  const { ai, calls } = fakeAi();
+  const report = await dubLines(source, store, ai, { ...options, speakers: ['anchor'] });
+  assert.equal(report.exitCode, 0);
+  assert.equal(calls.length, 2);
+  assert.deepEqual(report.rows.map((row) => row.line.id), [first.id, third.id]);
+  assert.equal(store.files.size, 2);
+});
+
+test('선택된 줄이 없으면 생성 없이 빈 표를 반환한다', async () => {
+  const store = new MemoryFileStore();
+  const { ai, calls } = fakeAi();
+  const report = await dubLines(source, store, ai, { ...options, cuts: ['없는 컷'] });
+  assert.equal(report.exitCode, 0);
+  assert.deepEqual(report.rows, []);
+  assert.equal(formatDubTable(report.rows), '컷 | 저장 이름 | 음성 길이(초) | 컷 길이(초) | 판정');
+  assert.equal(calls.length, 0);
 });
 
 test('WAV 경로는 구분자와 확장자를 정리한 저장 이름으로 읽는다', () => {
@@ -176,7 +208,8 @@ for (const force of [false, true]) {
 test('영어 대사가 없으면 경고하고 다음 줄은 영어로 생성한다', async () => {
   const missing: ScriptSource = {
     origin: 'bundled', async load() {
-      return { origin: 'bundled', lines: [{ ...first, textEn: undefined }, second], speakers, loadedAt: 0, warnings: [] };
+      return { origin: 'bundled', lines: [{ ...first, textEn: undefined }, { ...second, speaker: 'anchor' }],
+        speakers, loadedAt: 0, warnings: [] };
     },
   };
   const store = new MemoryFileStore();
@@ -186,7 +219,7 @@ test('영어 대사가 없으면 경고하고 다음 줄은 영어로 생성한�
   assert.deepEqual(report.rows.map((row) => row.status), ['skipped', 'generated']);
   assert.match(report.warnings[0], /S#01-C001.*영어 대사/);
   assert.equal(calls.length, 1);
-  assert.deepEqual([...store.files.keys()], ['S01/S01-C002-토끼-Kore-en-v1.wav']);
+  assert.deepEqual([...store.files.keys()], ['S01/S01-C002-앵커-Kore-en-v1.wav']);
 });
 
 test('한 줄 생성 실패 후에도 다음 줄을 처리하고 종료 코드 2와 이유를 남긴다', async () => {
@@ -197,11 +230,11 @@ test('한 줄 생성 실패 후에도 다음 줄을 처리하고 종료 코드 2
     return count === 1 ? new GenerateContentResponse() : success.ai.models.generateContent(request);
   } } };
   const store = new MemoryFileStore();
-  const report = await dubLines(source, store, ai, options);
+  const report = await dubLines(source, store, ai, { ...options, speakers: ['anchor'] });
   assert.equal(report.exitCode, 2);
-  assert.equal(count, 3);
-  assert.deepEqual(report.rows.map((row) => row.status), ['failed', 'generated', 'generated']);
-  assert.equal(store.files.size, 2);
+  assert.equal(count, 2);
+  assert.deepEqual(report.rows.map((row) => row.status), ['failed', 'generated']);
+  assert.equal(store.files.size, 1);
   assert.match(formatDubTable(report.rows), /실패: 음성 생성 응답에 오디오 데이터/);
 });
 
@@ -210,22 +243,22 @@ test('파일 쓰기 실패도 해당 줄만 실패로 남기고 계속한다', a
     if (path.includes('C001-앵커') && path.startsWith('S01/')) throw new Error('저장 실패');
   } };
   const { ai, calls } = fakeAi();
-  const report = await dubLines(source, store, ai, options);
+  const report = await dubLines(source, store, ai, { ...options, speakers: ['anchor'] });
   assert.equal(report.exitCode, 2);
-  assert.equal(calls.length, 3);
+  assert.equal(calls.length, 2);
   assert.match(formatDubTable(report.rows), /실패: 저장 실패/);
 });
 
 test('dry-run은 대상 이름만 만들고 Gemini 호출과 쓰기가 없다', async () => {
   const store = new MemoryFileStore();
   const { ai, calls } = fakeAi();
-  const report = await dubLines(source, store, ai, { ...options, dryRun: true });
+  const report = await dubLines(source, store, ai, { ...options, speakers: ['anchor'], dryRun: true });
   assert.equal(report.exitCode, 0);
   assert.equal(calls.length, 0);
   assert.equal(store.files.size, 0);
-  assert.equal(report.rows.length, 3);
+  assert.equal(report.rows.length, 2);
   assert.match(formatDubTable(report.rows), /S01\/S01-C001-앵커-Kore-v1\.wav.*생성 예정/);
-  assert.equal((await dubLines(source, store, undefined, { ...options, dryRun: true })).exitCode, 0);
+  assert.equal((await dubLines(source, store, undefined, { ...options, speakers: ['anchor'], dryRun: true })).exitCode, 0);
 });
 
 test('태그 대사와 선택 모델을 기존 생성 함수에 전달한다', async () => {

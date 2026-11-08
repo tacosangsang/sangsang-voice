@@ -14,17 +14,22 @@ test('목소리만 주면 사본·한국어·out·빈 지시문을 쓴다', () =
   });
 });
 
-test('반복 필터와 모든 선택 인자를 해석한다', () => {
+test('씬·컷 반복 필터와 모든 선택 인자를 해석한다', () => {
   assert.deepEqual(parseDubArgs([
     '--voice', 'Kore', '--source', 'notion', '--scene', 'S#01', '--scene', 'S#05',
-    '--cut', 'S#01-C001', '--cut', 'S#05-C003', '--speaker', 'anchor', '--speaker', 'rabbit',
+    '--cut', 'S#01-C001', '--cut', 'S#05-C003', '--speaker', 'anchor',
     '--style', 'Speak softly.', '--lang', 'en', '--model-preference', 'gemini-3.8-flash-lite-tts',
     '--out', '녹음', '--force', '--dry-run',
   ]), {
     source: 'notion', scenes: ['S#01', 'S#05'], cuts: ['S#01-C001', 'S#05-C003'],
-    speakers: ['anchor', 'rabbit'], voiceName: 'Kore', stylePrompt: 'Speak softly.', language: 'en',
+    speakers: ['anchor'], voiceName: 'Kore', stylePrompt: 'Speak softly.', language: 'en',
     modelPreference: 'gemini-3.8-flash-lite-tts', out: '녹음', force: true, dryRun: true,
   });
+});
+
+test('--speaker를 둘 이상 지정하면 인자 오류를 낸다', () => {
+  assert.throws(() => parseDubArgs(['--voice', 'Kore', '--speaker', 'anchor', '--speaker', 'rabbit']),
+    CliArgumentError);
 });
 
 for (const args of [

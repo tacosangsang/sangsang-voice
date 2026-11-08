@@ -5,6 +5,7 @@ import type { ScriptSource } from '../../src/script/source';
 import type { DubbingItem } from '../../src/types';
 import { generateDubbing } from '../dubbing';
 import type { GeminiClient } from '../dubbing';
+import { CliArgumentError } from './dubArgs';
 import type { DubOptions, LineSelection } from './dubArgs';
 import type { FileStore } from './fileStore';
 
@@ -83,10 +84,15 @@ export async function dubLines(
   source: ScriptSource, store: FileStore, ai: GeminiClient | undefined, options: DubOptions,
 ): Promise<DubReport> {
   const snapshot = await source.load();
+  const selectedLines = selectLines(snapshot.lines, options);
+  const selectedSpeakerIds = [...new Set(selectedLines.map((line) => line.speaker))];
+  if (selectedSpeakerIds.length > 1) {
+    throw new CliArgumentError(`선택된 줄에 화자가 ${selectedSpeakerIds.length}명입니다(${selectedSpeakerIds.join(', ')}). --speaker로 한 화자만 고르세요.`);
+  }
   const names = recordNamesFromPaths(await store.list());
   const warnings = [...snapshot.warnings];
   const rows: DubRow[] = [];
-  for (const line of selectLines(snapshot.lines, options)) {
+  for (const line of selectedLines) {
     const { recordName, skipExisting } = planLine(line, snapshot.speakers, options, names);
     const text = lineText(line, options.language);
     if (text === undefined || !text.trim()) {

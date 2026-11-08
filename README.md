@@ -43,7 +43,7 @@ npm run dev
 ## 터미널 자동화
 
 저장소 루트에서 실행합니다. npm 명령 뒤의 `--` 다음에 CLI 인자를 적습니다.
-두 CLI 모두 같은 종류의 필터를 반복하면 OR, 서로 다른 종류의 필터를 함께 쓰면 AND로 고릅니다. 필터가 없으면 전체, 일치하는 줄이 없으면 0줄로 끝납니다.
+두 CLI 모두 씬·컷 필터를 반복하면 OR, 서로 다른 종류의 필터를 함께 쓰면 AND로 고릅니다. 필터가 없으면 전체, 일치하는 줄이 없으면 0줄로 끝납니다.
 
 ### 대본 점검: `npm run script:lint`
 
@@ -74,12 +74,13 @@ npm run script:lint -- --source notion --scene "S#01" --json --strict
 ### 음성 생성: `npm run dub`
 
 ```sh
-npm run dub -- --voice Kore --scene "S#01" --dry-run
-npm run dub -- --voice Kore --scene "S#01" --style "Read calmly."
-npm run dub -- --voice Kore --source notion --scene "S#01" --lang en --dry-run
+npm run dub -- --voice Kore --speaker anchor --scene "S#01" --dry-run
+npm run dub -- --voice Kore --speaker anchor --scene "S#01" --style "Read calmly."
+npm run dub -- --voice Kore --speaker anchor --source notion --scene "S#01" --lang en --dry-run
 ```
 
 먼저 `--dry-run`으로 대상과 저장 이름을 확인합니다. 이때 TTS 호출과 파일 쓰기는 없습니다. 실제 생성에는 `GEMINI_API_KEY`가 필요하며 비용·일일 호출 제한을 고려해야 합니다.
+한 목소리는 한 화자만 사용하므로 `--speaker`는 한 명만 지정하며, 선택된 줄에 화자가 둘 이상이면 `--dry-run`도 종료 코드 1로 거절합니다.
 영어는 `textEn`이 있는 줄만 사용하고, 해당 언어 대사가 없으면 경고 후 건너뜁니다. 번역을 지어 넣지 말고 사용자가 정한 문장을 노션에 먼저 적습니다.
 
 인자는 `server/cli/dubArgs.ts` 기준입니다.
@@ -89,7 +90,7 @@ npm run dub -- --voice Kore --source notion --scene "S#01" --lang en --dry-run
 | `--source <출처>` | `bundled` | `bundled` 또는 `notion` |
 | `--scene <씬>` | 전체 | 컷 번호 접두사로 선택. 반복 가능 |
 | `--cut <컷>` | 전체 | 컷 번호가 정확히 같은 줄 선택. 반복 가능 |
-| `--speaker <id>` | 전체 | 화자 id로 선택. 반복 가능 |
+| `--speaker <id>` | 전체 | 화자 id 한 명만 선택. 반복 지정 불가 |
 | `--voice <이름>` | 없음, 필수 | TTS 목소리 이름. 예: `Kore` |
 | `--style <지시문>` | 빈 문자열 | 연기 지시. 줄의 연기 지시가 뒤에 붙고 서버가 언어 지시를 추가 |
 | `--lang <언어>` | `ko` | `ko` 또는 `en` |
