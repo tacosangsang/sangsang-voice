@@ -7,8 +7,8 @@ PLATING(10분 AI 애니메이션)의 대사 녹음본을 Gemini TTS로 만드는
 ## 구조
 - `server.ts`: 환경 변수로 의존을 만들고 Vite·정적 파일·서버 시작을 맡는다. `server/app.ts`의 `createApp(deps)`가 모든 API 라우트를 등록한다. `server/recordingsConfig.ts`는 전달받은 환경 값으로 녹음 저장소 설정을 만든다.
 - `server/dubbing.ts`: `generateDubbing(ai, request)`가 언어 지시·TTS 모델 선택·경량 모델 재시도·WAV 변환을 맡는다. 음성 없는 응답은 `NoAudioError`로 구분한다.
-- `server/cli/`: `npm run dub` 진입점과 인자 해석, 대본 줄 선택·생성·판정 표, `FileStore` 인터페이스와 폴더 저장 구현. 기존 TTS·저장 이름 규칙을 재사용한다.
-- `src/shared/wav.ts`: 서버·브라우저 공용 WAV 유틸(raw PCM에 헤더 씌우기, float 채널 인코딩).
+- `server/cli/`: `npm run dub` 진입점과 인자 해석, 대본 줄 선택·생성·판정 표, `FileStore` 인터페이스와 폴더 저장 구현. `dubBatch.ts`는 `--batch` 묶음 계획·생성·무음 자르기와 실패 원본 이름을 맡는다. 기존 TTS·저장 이름 규칙을 재사용한다.
+- `src/shared/wav.ts`: 서버·브라우저 공용 WAV 유틸(raw PCM에 헤더 씌우기, float 채널 인코딩, PCM 16bit WAV 디코딩).
 - `src/audio/effects.ts`: `AudioEffect` 인터페이스와 잔향·드론 구현. 실시간 재생과 내보내기가 같은 정의를 쓴다. 새 효과는 이 인터페이스를 구현한다.
 - `src/audio/offlineRender.ts`: OfflineAudioContext로 효과를 입혀 WAV를 만든다("효과 포함 WAV" 버튼).
 - `src/utils/audioEngine.ts`: 실시간 재생 엔진(MediaElementSource 기반).
@@ -47,13 +47,16 @@ PLATING(10분 AI 애니메이션)의 대사 녹음본을 Gemini TTS로 만드는
 ## 자동화
 인자·환경 변수·저장 이름·종료 코드·한계는 [README.md의 터미널 자동화](README.md#터미널-자동화)를 참고한다.
 
-줄 단위 음성 생성:
+줄 단위 또는 묶음 음성 생성:
 
 ```sh
-npm run dub -- --voice Kore
-npm run dub -- --voice Kore --style "Read calmly." --scene "S#01"
-npm run dub -- --voice Kore --scene "S#01" --dry-run
+npm run dub -- --voice Kore --speaker anchor
+npm run dub -- --voice Kore --speaker anchor --style "Read calmly." --scene "S#01"
+npm run dub -- --voice Kore --speaker anchor --scene "S#01" --dry-run
+npm run dub -- --voice Kore --speaker anchor --scene "S#01" --batch
 ```
+
+`--batch`는 같은 씬·화자·감정으로 이어지는 줄을 한 번에 생성해 무음에서 자른다. 감정 칸이 비면 묶이지 않는다. `--batch --dry-run`은 묶음 id·줄 수·호출 예정 횟수를 표 앞에 출력한다. 일부 줄만 저장되어 있으면 전체를 다시 생성하고 기존 파일은 다음 버전으로 보존한다. 자르기 실패 원본은 첫 줄 이름에 `-batch`를 붙여 별도 버전으로 저장하고 종료 코드 2를 반환한다. 실제 Gemini 음성으로 자르기는 아직 검증하지 않았다.
 
 녹음 전 대본 점검:
 
