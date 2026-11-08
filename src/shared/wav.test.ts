@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { encodeFloatChannelsToWav, isWavMime, parsePcmMime, wrapPcm16AsWav } from './wav';
+import { decodePcm16Wav, encodeFloatChannelsToWav, isWavMime, parsePcmMime, wrapPcm16AsWav } from './wav';
 
 for (const [label, mime, expected] of [
   ['표준 형식', 'audio/wav', true],
@@ -89,3 +89,78 @@ for (const [label, channels] of [
     assert.equal(new DataView(wav.buffer).getUint32(40, true), 0);
   });
 }
+
+test('PCM 16bit WAV를 되읽으면 부호와 최댓값을 복원한다', () => {
+  const integers = [-32768, -16384, -1, 0, 1, 16384, 32767];
+  const pcm = new Uint8Array(integers.length * 2);
+  const view = new DataView(pcm.buffer);
+  integers.forEach((value, index) => view.setInt16(index * 2, value, true));
+  const wav = wrapPcm16AsWav(pcm, { sampleRate: 24000, channels: 1, bitsPerSample: 16 });
+
+  const decoded = decodePcm16Wav(wav);
+
+  assert.equal(decoded.sampleRate, 24000);
+  assert.deepEqual(decoded.channels, [Float32Array.from(integers, (value) => value / (value < 0 ? 32768 : 32767))]);
+});
+
+test('float WAV를 되읽으면 클리핑 경계를 포함해 양자화 오차 안에서 복원한다', () => {
+  const samples = Float32Array.from([-2, -1, -0.5, 0, 0.5, 1, 2]);
+  const decoded = decodePcm16Wav(encodeFloatChannelsToWav([samples], 16000));
+  samples.forEach((value, index) => {
+    assert.ok(Math.abs(decoded.channels[0][index] - Math.max(-1, Math.min(1, value))) <= 1 / 32767);
+  });
+  assert.equal(decoded.channels[0][0], -1);
+  assert.equal(decoded.channels[0][6], 1);
+});
+
+test('두 채널 인터리브와 부분 버퍼의 시작 위치를 복원한다', () => {
+  const channels = [Float32Array.from([-1, 0, 1]), Float32Array.from([1, -1, 0])];
+  const wav = encodeFloatChannelsToWav(channels, 48000);
+  const padded = new Uint8Array(wav.length + 9);
+  padded.set(wav, 5);
+
+  assert.deepEqual(decodePcm16Wav(padded.subarray(5, 5 + wav.length)), { sampleRate: 48000, channels });
+});
+
+test('홀수 크기 추가 청크의 패딩과 data 뒤의 추가 청크를 건너뛴다', () => {
+  const wav = encodeFloatChannelsToWav([Float32Array.from([1, -1])], 16000);
+  const junk = Uint8Array.from([74, 85, 78, 75, 1, 0, 0, 0, 7, 0]);
+  const extended = new Uint8Array(wav.length + junk.length * 2);
+  extended.set(wav.subarray(0, 12));
+  extended.set(junk, 12);
+  extended.set(wav.subarray(12), 22);
+  extended.set(junk, wav.length + junk.length);
+  new DataView(extended.buffer).setUint32(4, extended.length - 8, true);
+
+  assert.deepEqual(decodePcm16Wav(extended), decodePcm16Wav(wav));
+});
+
+test('data가 fmt 앞에 있어도 두 청크를 찾아 읽는다', () => {
+  const wav = encodeFloatChannelsToWav([Float32Array.from([1])], 16000);
+  const reordered = new Uint8Array(wav.length);
+  reordered.set(wav.subarray(0, 12));
+  reordered.set(wav.subarray(36), 12);
+  reordered.set(wav.subarray(12, 36), 22);
+
+  assert.deepEqual(decodePcm16Wav(reordered), decodePcm16Wav(wav));
+});
+
+for (const [label, offset, value] of [
+  ['8bit', 34, 8], ['float PCM', 20, 3], ['채널 없음', 22, 0],
+  ['블록 정렬 오류', 32, 3], ['샘플레이트 없음', 24, 0],
+] as const) {
+  test(`지원하지 않거나 잘못된 WAV 형식은 거절한다: ${label}`, () => {
+    const wav = encodeFloatChannelsToWav([Float32Array.from([1])], 16000);
+    new DataView(wav.buffer).setUint16(offset, value, true);
+    assert.throws(() => decodePcm16Wav(wav), /WAV/);
+  });
+}
+
+test('잘린 청크와 누락된 필수 청크를 거절한다', () => {
+  const wav = encodeFloatChannelsToWav([Float32Array.from([1])], 16000);
+  const missingData = wav.slice(0, 36);
+  new DataView(missingData.buffer).setUint32(4, missingData.length - 8, true);
+  for (const bytes of [new Uint8Array(12), wav.subarray(0, wav.length - 1), missingData]) {
+    assert.throws(() => decodePcm16Wav(bytes), /WAV/);
+  }
+});

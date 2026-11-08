@@ -50,6 +50,61 @@ export function wrapPcm16AsWav(pcm: Uint8Array, format: PcmFormat): Uint8Array<A
   return out;
 }
 
+export class PcmWavError extends Error {
+  readonly name = 'PcmWavError';
+}
+
+/** PCM 16bit WAV의 청크를 읽고 인터리브된 샘플을 채널별로 복원한다. */
+export function decodePcm16Wav(bytes: Uint8Array): { sampleRate: number; channels: Float32Array[] } {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const tag = (offset: number) => String.fromCharCode(...bytes.subarray(offset, offset + 4));
+  if (bytes.length < 12 || tag(0) !== 'RIFF' || tag(8) !== 'WAVE') {
+    throw new PcmWavError('WAV RIFF 헤더가 올바르지 않습니다.');
+  }
+  const end = view.getUint32(4, true) + 8;
+  if (end < 12 || end > bytes.length) throw new PcmWavError('WAV 파일이 잘렸습니다.');
+  let format: { sampleRate: number; channels: number; blockAlign: number } | undefined;
+  const chunks: { start: number; size: number }[] = [];
+  let offset = 12;
+  while (offset + 8 <= end) {
+    const size = view.getUint32(offset + 4, true);
+    const start = offset + 8;
+    if (start + size > end) throw new PcmWavError('WAV 청크가 잘렸습니다.');
+    if (tag(offset) === 'fmt ') {
+      if (size < 16) throw new PcmWavError('WAV fmt 청크가 잘렸습니다.');
+      if (view.getUint16(start, true) !== 1 || view.getUint16(start + 14, true) !== 16) {
+        throw new PcmWavError('WAV는 16bit PCM 형식만 지원합니다.');
+      }
+      const channels = view.getUint16(start + 2, true);
+      const sampleRate = view.getUint32(start + 4, true);
+      const blockAlign = view.getUint16(start + 12, true);
+      if (!channels || !sampleRate || blockAlign !== channels * 2 ||
+        view.getUint32(start + 8, true) !== sampleRate * blockAlign) {
+        throw new PcmWavError('WAV PCM 포맷이 올바르지 않습니다.');
+      }
+      format = { channels, sampleRate, blockAlign };
+    }
+    if (tag(offset) === 'data') chunks.push({ start, size });
+    offset = start + size + size % 2;
+  }
+  if (offset !== end || !format || !chunks.length) throw new PcmWavError('WAV 필수 청크 또는 패딩이 없습니다.');
+  const { sampleRate, channels: count, blockAlign } = format;
+  if (chunks.some(({ size }) => size % blockAlign !== 0)) throw new PcmWavError('WAV 샘플 프레임이 잘렸습니다.');
+  const frames = chunks.reduce((total, { size }) => total + size / blockAlign, 0);
+  const channels = Array.from({ length: count }, () => new Float32Array(frames));
+  let frame = 0;
+  for (const { start, size } of chunks) {
+    for (let position = start; position < start + size; position += blockAlign) {
+      for (let channel = 0; channel < count; channel++) {
+        const value = view.getInt16(position + channel * 2, true);
+        channels[channel][frame] = value / (value < 0 ? 0x8000 : 0x7fff);
+      }
+      frame++;
+    }
+  }
+  return { sampleRate, channels };
+}
+
 /** float 채널 데이터(-1..1)를 16bit WAV로 인코딩한다. 브라우저의 AudioBuffer 내보내기에 쓴다. */
 export function encodeFloatChannelsToWav(channels: Float32Array[], sampleRate: number): Uint8Array<ArrayBuffer> {
   const frames = channels[0]?.length ?? 0;
