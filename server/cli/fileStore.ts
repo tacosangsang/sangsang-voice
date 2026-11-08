@@ -1,4 +1,4 @@
-import { mkdir, readdir, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, realpath, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 export interface FileStore {
@@ -35,6 +35,10 @@ export class DirFileStore implements FileStore {
       throw new FilePathError('저장 경로는 출력 폴더 안에 있어야 합니다.');
     }
     await mkdir(dirname(target), { recursive: true });
+    const realInside = relative(await realpath(this.root), await realpath(dirname(target)));
+    if (isAbsolute(realInside) || realInside === '..' || realInside.startsWith(`..${sep}`)) {
+      throw new FilePathError('저장 경로는 출력 폴더 안에 있어야 합니다.');
+    }
     // 다른 실행이 같은 버전을 먼저 저장해도 기존 음성을 덮어쓰지 않는다.
     await writeFile(target, bytes, { flag: 'wx' });
   }
