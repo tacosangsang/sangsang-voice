@@ -7,13 +7,16 @@ import { generateDubbing } from '../dubbing';
 import type { GeminiClient } from '../dubbing';
 import { CliArgumentError } from './dubArgs';
 import type { DubOptions, LineSelection } from './dubArgs';
+import { generateBatch, nextBatchName, planDubGroups } from './dubBatch';
+import type { BatchPlan } from './dubBatch';
 import type { FileStore } from './fileStore';
 
 export type DubRow = {
   readonly line: ScriptLine;
   readonly recordName: string;
 } & (
-  | { readonly status: 'generated'; readonly audioSeconds: number }
+  | { readonly status: 'generated'; readonly audioSeconds: number; readonly suspicious?: boolean }
+  | { readonly status: 'unsplit'; readonly audioSeconds: number; readonly reason: string }
   | { readonly status: 'dry-run' }
   | { readonly status: 'skipped' | 'failed'; readonly reason: string }
 );
@@ -21,6 +24,7 @@ export type DubRow = {
 export type DubReport = {
   readonly rows: readonly DubRow[];
   readonly warnings: readonly string[];
+  readonly batches: readonly BatchPlan[];
   readonly exitCode: 0 | 2;
 };
 
@@ -92,7 +96,73 @@ export async function dubLines(
   const names = recordNamesFromPaths(await store.list());
   const warnings = [...snapshot.warnings];
   const rows: DubRow[] = [];
-  for (const line of selectedLines) {
+  const batches: BatchPlan[] = [];
+  for (const group of planDubGroups(selectedLines, options)) {
+    const plans = group.lines.map((line) => planLine(line, snapshot.speakers, options, names));
+    const allExist = plans.every((plan) => plan.skipExisting);
+    if (options.batch) batches.push({ id: group.id, lineCount: group.lines.length,
+      calls: allExist || !group.lines.some((line) => lineText(line, options.language)?.trim()) ? 0 : 1 });
+    if (group.lines.length > 1) {
+      if (allExist) {
+        group.lines.forEach((line, index) => rows.push({ line, recordName: plans[index].recordName,
+          status: 'skipped', reason: '이미 같은 이름의 파일이 있습니다.' }));
+        continue;
+      }
+      if (!options.force && plans.some((plan) => plan.skipExisting)) {
+        warnings.push(`${group.id}: 묶음 일부만 저장되어 있어 이미 있는 줄도 다시 생성합니다. 기존 파일은 보존하고 다음 버전으로 저장합니다.`);
+      }
+      const batchOptions = { ...options, force: true };
+      if (options.dryRun) {
+        for (const line of group.lines) {
+          const { recordName } = planLine(line, snapshot.speakers, batchOptions, names);
+          rows.push({ line, recordName, status: 'dry-run' });
+          names.push(recordName);
+        }
+        continue;
+      }
+      try {
+        if (!ai) throw new CliArgumentError('Gemini 클라이언트가 없습니다.');
+        const audio = await generateBatch(ai, group, options);
+        switch (audio.kind) {
+          case 'whole': {
+            const line = group.lines[0];
+            const recordName = nextBatchName(plans[0].recordName, names);
+            const audioSeconds = wavDurationSeconds(audio.bytes);
+            await store.write(`${recordName}.wav`, audio.bytes);
+            names.push(recordName);
+            rows.push({ line, recordName, status: 'unsplit', audioSeconds,
+              reason: `${group.id}: ${audio.reason}` });
+            break;
+          }
+          case 'split': {
+            for (const [index, line] of group.lines.entries()) {
+              const { recordName } = planLine(line, snapshot.speakers, batchOptions, names);
+              const segment = audio.segments[index];
+              try {
+                await store.write(`${recordName}.wav`, segment.bytes);
+                names.push(recordName);
+                rows.push({ line, recordName, status: 'generated', audioSeconds: segment.audioSeconds,
+                  suspicious: segment.suspicious });
+              } catch (error) {
+                rows.push({ line, recordName, status: 'failed', reason: error instanceof Error ? error.message : '알 수 없는 저장 오류' });
+              }
+            }
+            break;
+          }
+          default: {
+            const unreachable: never = audio;
+            throw new TypeError(`알 수 없는 묶음 결과: ${unreachable}`);
+          }
+        }
+      } catch (error) {
+        for (const line of group.lines) {
+          const { recordName } = planLine(line, snapshot.speakers, batchOptions, names);
+          rows.push({ line, recordName, status: 'failed', reason: error instanceof Error ? error.message : '알 수 없는 묶음 생성 오류' });
+        }
+      }
+      continue;
+    }
+    const line = group.lines[0];
     const { recordName, skipExisting } = planLine(line, snapshot.speakers, options, names);
     const text = lineText(line, options.language);
     if (text === undefined || !text.trim()) {
@@ -128,7 +198,7 @@ export async function dubLines(
       rows.push({ line, recordName, status: 'failed', reason: error instanceof Error ? error.message : '알 수 없는 생성 오류' });
     }
   }
-  return { rows, warnings, exitCode: rows.some((row) => row.status === 'failed') ? 2 : 0 };
+  return { rows, warnings, batches, exitCode: rows.some((row) => row.status === 'failed' || row.status === 'unsplit') ? 2 : 0 };
 }
 
 export function formatDubTable(rows: readonly DubRow[]): string {
@@ -141,8 +211,10 @@ export function formatDubTable(rows: readonly DubRow[]): string {
         seconds = row.audioSeconds.toFixed(1);
         const fit = checkFit(row.line, row.audioSeconds);
         verdict = fit.fits ? '적합' : `+${fit.overSeconds.toFixed(1)}s 초과`;
+        if (row.suspicious) verdict += ' · 들어 보고 확인';
         break;
       }
+      case 'unsplit': seconds = row.audioSeconds.toFixed(1); verdict = `통째 저장(자르기 실패): ${row.reason}`; break;
       case 'dry-run': verdict = '생성 예정'; break;
       case 'skipped': verdict = `건너뜀: ${row.reason}`; break;
       case 'failed': verdict = `실패: ${row.reason}`; break;

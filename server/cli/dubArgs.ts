@@ -17,6 +17,7 @@ export type DubOptions = LineSelection & {
   readonly out: string;
   readonly force: boolean;
   readonly dryRun: boolean;
+  readonly batch: boolean;
 };
 
 export class CliArgumentError extends Error {
@@ -35,6 +36,7 @@ const ARGUMENT_OPTIONS = {
   out: { type: 'string', default: 'out' },
   force: { type: 'boolean', default: false },
   'dry-run': { type: 'boolean', default: false },
+  batch: { type: 'boolean', default: false },
 } as const;
 
 export function parseDubArgs(args: string[]): DubOptions {
@@ -68,6 +70,6 @@ export function parseDubArgs(args: string[]): DubOptions {
   return {
     source: values.source, scenes, cuts, speakers, voiceName: values.voice.trim(),
     stylePrompt: values.style, language: values.lang, modelPreference: values['model-preference'],
-    out: values.out, force: values.force, dryRun: values['dry-run'],
+    out: values.out, force: values.force, dryRun: values['dry-run'], batch: values.batch,
   };
 }

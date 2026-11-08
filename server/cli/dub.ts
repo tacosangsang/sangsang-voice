@@ -5,6 +5,7 @@ import type { ScriptSource } from '../../src/script/source';
 import { DEFAULT_SCRIPT_PAGE_ID, NotionScriptSource } from '../notionScriptSource';
 import { CliArgumentError, parseDubArgs } from './dubArgs';
 import { dubLines, formatDubTable } from './dubLines';
+import { formatBatchPlan } from './dubBatch';
 import { DirFileStore } from './fileStore';
 
 // 외부 API 오류에 설정 값이 들어 있어도 터미널에는 노출하지 않는다.
@@ -36,6 +37,7 @@ try {
   });
   const report = await dubLines(source, new DirFileStore(options.out), ai, options);
   for (const warning of report.warnings) console.error(redact(`경고: ${warning}`));
+  if (options.batch && options.dryRun) console.log(redact(formatBatchPlan(report.batches)));
   console.log(redact(formatDubTable(report.rows)));
   process.exitCode = report.exitCode;
 } catch (error) {
