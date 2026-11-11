@@ -176,13 +176,18 @@ test('dry-run은 묶음 id·줄 수·호출 예정 횟수를 출력하며 호출
   assert.deepEqual(report.rows.map((row) => row.status), ['dry-run', 'dry-run', 'dry-run']);
 });
 
-test('잘린 길이 비중이 대사 길이와 다르면 해당 줄만 들어 보고 확인 표시한다', async () => {
-  const { ai } = fakeAi(tones([0.1, 1.4]));
-  const report = await dubLines(source(script(2)), new MemoryFileStore(), ai, options);
-  const table = formatDubTable(report.rows).split('\n');
-  assert.match(table[1], /들어 보고 확인/);
-  assert.doesNotMatch(table[2], /들어 보고 확인/);
-  assert.equal(report.exitCode, 0);
+test('줄 길이 비율이 안 맞으면 batch-v1으로 원본을 통째 저장하고 코드 2를 반환한다', async () => {
+  const bytes = tones([0.1, 1.4]);
+  const { ai, calls } = fakeAi(bytes);
+  const store = new MemoryFileStore();
+  const report = await dubLines(source(script(2)), store, ai, options);
+  assert.equal(report.exitCode, 2);
+  assert.equal(calls.length, 1);
+  assert.deepEqual([...store.files.keys()], ['S01/S01-C001-앵커-Kore-batch-v1.wav']);
+  assert.deepEqual(store.files.get('S01/S01-C001-앵커-Kore-batch-v1.wav'), bytes);
+  assert.equal(report.rows.length, 1);
+  assert.equal(report.rows[0].status, 'unsplit');
+  assert.match(formatDubTable(report.rows), /통째 저장.*줄 길이 비율이 맞는 자르기 위치를 찾지 못했습니다\./);
 });
 
 test('일부 영어 대사가 없으면 한 줄 경로로 나눠 있는 대사만 생성한다', async () => {
@@ -208,15 +213,25 @@ test('묶음의 파일 쓰기 실패는 해당 줄에 남기고 다음 줄을 �
   assert.deepEqual(written, ['S01/S01-C002-앵커-Kore-v1.wav']);
 });
 
-test('의심 판정은 태그를 포함해 실제로 전달한 lineText의 글자 수를 쓴다', async () => {
+test('한국어 묶음 가중치는 태그와 공백 대신 음절 수를 쓴다', async () => {
   const lines = script(2);
-  lines[0] = { ...lines[0], text: '가가', ttsText: '<sigh>가가' };
-  lines[1] = { ...lines[1], text: '나나' };
-  const { ai } = fakeAi(tones([0.4, 0.4]));
+  lines[0] = { ...lines[0], text: '가가', ttsText: '<sigh> 가가' };
+  lines[1] = { ...lines[1], text: '나'.repeat(8) };
+  const { ai } = fakeAi(tones([0.4, 1.6]));
   const report = await dubLines(source(lines), new MemoryFileStore(), ai, options);
-  const table = formatDubTable(report.rows).split('\n');
-  assert.doesNotMatch(table[1], /들어 보고 확인/);
-  assert.match(table[2], /들어 보고 확인/);
+  assert.equal(report.exitCode, 0);
+  assert.deepEqual(report.rows.map((row) => row.status), ['generated', 'generated']);
+  assert.doesNotMatch(formatDubTable(report.rows), /들어 보고 확인/);
+});
+
+test('한글 음절이 없는 영어 묶음 가중치는 글자 수를 쓴다', async () => {
+  const lines = script(2);
+  lines[0] = { ...lines[0], textEn: 'A' };
+  lines[1] = { ...lines[1], textEn: 'BBBB' };
+  const { ai } = fakeAi(tones([0.4, 1.6]));
+  const report = await dubLines(source(lines), new MemoryFileStore(), ai, { ...options, language: 'en' });
+  assert.equal(report.exitCode, 0);
+  assert.deepEqual(report.rows.map((row) => row.status), ['generated', 'generated']);
 });
 
 test('두 채널 WAV도 첫 채널에서만 자르고 줄별 WAV는 모노로 저장한다', async () => {

@@ -1,4 +1,4 @@
-import { lineText } from '../../src/data/platingScript';
+import { countSyllables, lineText } from '../../src/data/platingScript';
 import type { ScriptLine } from '../../src/data/platingScript';
 import { findLineRanges, suspiciousRanges } from '../../src/audio/takeSplitter';
 import { batchRequest, groupConsecutiveLines } from '../../src/script/lineGroups';
@@ -60,8 +60,9 @@ export async function generateBatch(
   try {
     const { sampleRate, channels } = decodePcm16Wav(bytes);
     const samples = channels[0];
-    const ranges = findLineRanges(samples, sampleRate, texts.length);
-    const suspicious = suspiciousRanges(ranges, texts.map((text) => text.length));
+    const weights = texts.map((text) => countSyllables(text) || text.length);
+    const ranges = findLineRanges(samples, sampleRate, texts.length, weights);
+    const suspicious = suspiciousRanges(ranges, weights);
     return { kind: 'split', texts, stylePrompt: request.stylePrompt, segments: ranges.map(({ start, end }, index) => ({
       bytes: encodeFloatChannelsToWav([samples.slice(start, end)], sampleRate),
       audioSeconds: (end - start) / sampleRate, suspicious: suspicious.includes(index),

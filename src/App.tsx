@@ -5,6 +5,7 @@ import { AudioPlayerBar } from './components/AudioPlayerBar';
 import { CustomStudioModal } from './components/CustomStudioModal';
 import { ClipLibrary } from './components/ClipLibrary';
 import { findGenerated } from './data/generationCache';
+import { countSyllables } from './data/platingScript';
 import { useScript } from './script/useScript';
 import { SceneManagerModal } from './components/SceneManagerModal';
 import { VoiceAuditionModal } from './components/VoiceAuditionModal';
@@ -481,7 +482,7 @@ export default function App() {
       try {
         const { segments, suspicious } = await takeSplitter.split(
           wholeUrl,
-          texts.map((t) => t!.replace(/<[^>]+>|\s/g, '').length),
+          texts.map((text) => countSyllables(text ?? '') || (text ?? '').length),
         );
         clips = group.lines.map((line, i) => ({
           id: `batch-${createdAt}-${i}`,
