@@ -118,5 +118,25 @@
   },
   "name": "S09/S09-C004-토끼-Enceladus-v1",
   "path": "clips/S09/S09-C004-토끼-Enceladus-v1.wav"
+ },
+ {
+  "id": "cli-batch-1794402756008-0",
+  "createdAt": 1794402756008,
+  "mimeType": "audio/wav",
+  "name": "S01/S01-C001-앵커-Kore-v2",
+  "fields": {
+   "id": "cli-batch-1794402756008-0",
+   "presetName": "S#01-C001 Kore (묶음)",
+   "voiceName": "Kore",
+   "text": "다음 소식입니다. 어제 낮 기온이 37도까지 치솟으며…",
+   "stylePrompt": "Polished state TV newscaster. Polite formal speech, steady even pace, emotionally neutral, quietly propagandistic. These are separate lines read one after another. Leave a clear silence of about one second between lines.",
+   "duration": 8.83,
+   "scriptLineId": "S#01-C001",
+   "language": "ko",
+   "mimeType": "audio/wav",
+   "recordName": "S01/S01-C001-앵커-Kore-v2",
+   "createdAt": 1794402756008
+  },
+  "path": "clips/S01/S01-C001-앵커-Kore-v2.wav"
  }
 ]
