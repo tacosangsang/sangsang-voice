@@ -123,101 +123,101 @@
   "id": "cli-batch-1794402756008-0",
   "createdAt": 1794402756008,
   "mimeType": "audio/wav",
-  "name": "S01/S01-C001-앵커-Kore-v2",
+  "name": "S01/S01-C001+C002-앵커-Kore-v1",
   "fields": {
    "id": "cli-batch-1794402756008-0",
    "presetName": "S#01-C001 Kore (묶음)",
    "voiceName": "Kore",
-   "text": "다음 소식입니다. 어제 낮 기온이 37도까지 치솟으며…",
+   "text": "다음 소식입니다. 어제 낮 기온이 37도까지 치솟으며… …올여름 최고기온 기록을 또다시 경신했습니다.",
    "stylePrompt": "Polished state TV newscaster. Polite formal speech, steady even pace, emotionally neutral, quietly propagandistic. These are separate lines read one after another. Leave a clear silence of about one second between lines.",
    "duration": 8.83,
    "scriptLineId": "S#01-C001",
    "language": "ko",
    "mimeType": "audio/wav",
-   "recordName": "S01/S01-C001-앵커-Kore-v2",
+   "recordName": "S01/S01-C001+C002-앵커-Kore-v1",
    "createdAt": 1794402756008
   },
-  "path": "clips/S01/S01-C001-앵커-Kore-v2.wav"
+  "path": "clips/S01/S01-C001+C002-앵커-Kore-v1.wav"
  },
  {
   "id": "cli-batch-1794402756008-1",
   "createdAt": 1794402756007,
   "mimeType": "audio/wav",
-  "name": "S01/S01-C002-앵커-Kore-v1",
+  "name": "S01/S01-C003-앵커-Kore-v1",
   "fields": {
    "id": "cli-batch-1794402756008-1",
    "presetName": "S#01-C002 Kore (묶음)",
    "voiceName": "Kore",
-   "text": "…올여름 최고기온 기록을 또다시 경신했습니다.",
+   "text": "밤사이 바닷물이 밀려들면서 해안 구역 세 곳이 추가로 물에 잠겼습니다.",
    "stylePrompt": "Polished state TV newscaster. Polite formal speech, steady even pace, emotionally neutral, quietly propagandistic. These are separate lines read one after another. Leave a clear silence of about one second between lines.",
    "duration": 5.32,
-   "scriptLineId": "S#01-C002",
+   "scriptLineId": "S#01-C003",
    "language": "ko",
    "mimeType": "audio/wav",
-   "recordName": "S01/S01-C002-앵커-Kore-v1",
+   "recordName": "S01/S01-C003-앵커-Kore-v1",
    "createdAt": 1794402756007
   },
-  "path": "clips/S01/S01-C002-앵커-Kore-v1.wav"
+  "path": "clips/S01/S01-C003-앵커-Kore-v1.wav"
  },
  {
   "id": "cli-batch-1794402756008-2",
   "createdAt": 1794402756006,
   "mimeType": "audio/wav",
-  "name": "S01/S01-C003-앵커-Kore-v1",
+  "name": "S01/S01-C004-앵커-Kore-v1",
   "fields": {
    "id": "cli-batch-1794402756008-2",
    "presetName": "S#01-C003 Kore (묶음)",
    "voiceName": "Kore",
-   "text": "밤사이 바닷물이 밀려들면서 해안 구역 세 곳이 추가로 물에 잠겼습니다.",
+   "text": "피난민이 몰리면서 43년째 이어진 영토 분쟁도 격화되고 있습니다.",
    "stylePrompt": "Polished state TV newscaster. Polite formal speech, steady even pace, emotionally neutral, quietly propagandistic. These are separate lines read one after another. Leave a clear silence of about one second between lines.",
    "duration": 5.27,
-   "scriptLineId": "S#01-C003",
+   "scriptLineId": "S#01-C004",
    "language": "ko",
    "mimeType": "audio/wav",
-   "recordName": "S01/S01-C003-앵커-Kore-v1",
+   "recordName": "S01/S01-C004-앵커-Kore-v1",
    "createdAt": 1794402756006
   },
-  "path": "clips/S01/S01-C003-앵커-Kore-v1.wav"
+  "path": "clips/S01/S01-C004-앵커-Kore-v1.wav"
  },
  {
   "id": "cli-batch-1794402756008-3",
   "createdAt": 1794402756005,
   "mimeType": "audio/wav",
-  "name": "S01/S01-C004-앵커-Kore-v1",
+  "name": "S01/S01-C005-앵커-Kore-1of2-v1",
   "fields": {
    "id": "cli-batch-1794402756008-3",
    "presetName": "S#01-C004 Kore (묶음)",
    "voiceName": "Kore",
-   "text": "피난민이 몰리면서 43년째 이어진 영토 분쟁도 격화되고 있습니다.",
+   "text": "농업 당국은 올해도 곡물 수확량이 0이라고 밝혔습니다.",
    "stylePrompt": "Polished state TV newscaster. Polite formal speech, steady even pace, emotionally neutral, quietly propagandistic. These are separate lines read one after another. Leave a clear silence of about one second between lines.",
    "duration": 4.26,
-   "scriptLineId": "S#01-C004",
+   "scriptLineId": "S#01-C005",
    "language": "ko",
    "mimeType": "audio/wav",
-   "recordName": "S01/S01-C004-앵커-Kore-v1",
+   "recordName": "S01/S01-C005-앵커-Kore-1of2-v1",
    "createdAt": 1794402756005
   },
-  "path": "clips/S01/S01-C004-앵커-Kore-v1.wav"
+  "path": "clips/S01/S01-C005-앵커-Kore-1of2-v1.wav"
  },
  {
   "id": "cli-batch-1794402756008-4",
   "createdAt": 1794402756004,
   "mimeType": "audio/wav",
-  "name": "S01/S01-C005-앵커-Kore-v1",
+  "name": "S01/S01-C005-앵커-Kore-2of2-v1",
   "fields": {
    "id": "cli-batch-1794402756008-4",
    "presetName": "S#01-C005 Kore (묶음)",
    "voiceName": "Kore",
-   "text": "농업 당국은 올해도 곡물 수확량이 0이라고 밝혔습니다. 정부는 사육 곤충 배급을 유지할 방침입니다.",
+   "text": "정부는 사육 곤충 배급을 유지할 방침입니다.",
    "stylePrompt": "Polished state TV newscaster. Polite formal speech, steady even pace, emotionally neutral, quietly propagandistic. These are separate lines read one after another. Leave a clear silence of about one second between lines.",
    "duration": 3.3,
    "scriptLineId": "S#01-C005",
    "language": "ko",
    "mimeType": "audio/wav",
-   "recordName": "S01/S01-C005-앵커-Kore-v1",
+   "recordName": "S01/S01-C005-앵커-Kore-2of2-v1",
    "createdAt": 1794402756004
   },
-  "path": "clips/S01/S01-C005-앵커-Kore-v1.wav"
+  "path": "clips/S01/S01-C005-앵커-Kore-2of2-v1.wav"
  },
  {
   "id": "cli-batch-1794402756008-5",
