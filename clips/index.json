@@ -238,5 +238,25 @@
    "createdAt": 1794402756003
   },
   "path": "clips/S01/S01-C006-2A-앵커-Kore-v1.wav"
+ },
+ {
+  "id": "cli-batch-1794402756008-6",
+  "createdAt": 1794402756002,
+  "mimeType": "audio/wav",
+  "name": "S01/S01-C007-앵커-Kore-v1",
+  "fields": {
+   "id": "cli-batch-1794402756008-6",
+   "presetName": "S#01-C007 Kore (묶음)",
+   "voiceName": "Kore",
+   "text": "당국은 야간 외출 자제를 당부했습니다.",
+   "stylePrompt": "Polished state TV newscaster. Polite formal speech, steady even pace, emotionally neutral, quietly propagandistic. These are separate lines read one after another. Leave a clear silence of about one second between lines.",
+   "duration": 3.25,
+   "scriptLineId": "S#01-C007",
+   "language": "ko",
+   "mimeType": "audio/wav",
+   "recordName": "S01/S01-C007-앵커-Kore-v1",
+   "createdAt": 1794402756002
+  },
+  "path": "clips/S01/S01-C007-앵커-Kore-v1.wav"
  }
 ]
