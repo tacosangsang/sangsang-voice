@@ -258,5 +258,25 @@
    "createdAt": 1794402756002
   },
   "path": "clips/S01/S01-C007-앵커-Kore-v1.wav"
+ },
+ {
+  "id": "cli-1794402791283",
+  "createdAt": 1794402791283,
+  "mimeType": "audio/wav",
+  "name": "S01/S01-C008-앵커-Kore-v1",
+  "fields": {
+   "id": "cli-1794402791283",
+   "presetName": "S#01-C008 Kore",
+   "voiceName": "Kore",
+   "text": "…이어서 날씨입니다. 내일도 전국에 폭염이 계속되겠습니다.",
+   "stylePrompt": "Polished state TV newscaster. Polite formal speech, steady even pace, emotionally neutral, quietly propagandistic.",
+   "duration": 5.36,
+   "scriptLineId": "S#01-C008",
+   "language": "ko",
+   "mimeType": "audio/wav",
+   "recordName": "S01/S01-C008-앵커-Kore-v1",
+   "createdAt": 1794402791283
+  },
+  "path": "clips/S01/S01-C008-앵커-Kore-v1.wav"
  }
 ]
