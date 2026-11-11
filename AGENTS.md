@@ -16,7 +16,8 @@ PLATING(10분 AI 애니메이션)의 대사 녹음본을 Gemini TTS로 만드는
 - `server/notionScriptSource.ts`: 노션 API로 컷표 페이지 블록을 읽어 파서에 넘긴다. `/api/script`가 `NOTION_TOKEN`이 있으면 매번 노션에서 읽고, 없거나 실패하면 저장소 사본과 경고를 돌려준다.
 - `src/data/platingScript.ts`: 대본 줄 타입, 아는 화자 7명, 노션을 못 읽을 때 쓰는 사본 29줄, 컷 길이 비교 `checkFit`, TTS 대사 검사 `ttsTextMatches`.
 - `src/shared/recording.ts`, `server/githubRecordingRepository.ts`, `src/storage/recordStore.ts`: 생성 음성 저장. 서버 `RecordingRepository`(깃허브 구현)와 브라우저 `RecordStore`(서버 또는 IndexedDB). 다른 저장소는 이 인터페이스를 구현한다.
-- `src/script/lineGroups.ts`, `src/audio/takeSplitter.ts`: 묶음 생성. 같은 씬·같은 화자·같은 감정(노션 "감정" 칸, 비면 묶지 않음)으로 이어 말하는 줄을 TTS 한 번으로 뽑고(무료 등급 하루 호출 제한 때문), 가장 긴 무음 구간에서 잘라 컷마다 저장한다. 자르기 실패 시 통째로 저장. 다른 자르기 방법은 `TakeSplitter`를 구현한다.
+- `src/script/lineGroups.ts`, `src/audio/takeSplitter.ts`: 묶음 생성. 같은 씬·같은 화자·같은 감정(노션 "감정" 칸, 비면 묶지 않음)으로 이어 말하는 줄을 TTS 한 번으로 뽑고(무료 등급 하루 호출 제한 때문), 대사 음절 수(한글 음절이 없으면 글자 수) 비율에 맞는 무음 구간에서 잘라 컷마다 저장한다. 자르기 실패 시 통째로 저장. 다른 자르기 방법은 `TakeSplitter`를 구현한다.
+- 앞 줄 대사가 `…` 또는 `...`로 끝나거나 다음 줄 대사가 `…` 또는 `...`로 시작하면 같은 묶음에 넣지 않는다.
 - `src/data/generationCache.ts`: 같은 조건(대사·목소리·지시문·언어)으로 만든 음성은 다시 부르지 않는다. 화면마다 "듣기"(호출 없음)와 "생성/다시 생성"(호출 1회)을 나눈다. 저장된 음성 목록은 `src/components/ClipLibrary.tsx`(플레이어 바로 아래, 항목마다 듣기·저장).
 - `src/shared/language.ts`: 대사 언어(한국어·영어). 서버가 연기 지시문 끝에 언어 지시를 붙인다. 프리셋 지시문에는 언어를 적지 않는다.
 

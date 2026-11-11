@@ -1,6 +1,7 @@
 // 한 번의 TTS 호출로 함께 뽑을 대본 줄 묶음.
 // 규칙: 같은 씬에서 같은 화자가 컷 순서상 이어서, 같은 감정으로 말하는 줄만 묶는다.
 // 다른 화자가 끼거나, 씬이나 감정(노션 "감정" 칸)이 바뀌면 끊는다. 감정이 비어 있는 줄은 묶지 않는다.
+// 앞 줄이 말줄임표로 끝나거나 다음 줄이 말줄임표로 시작해 이어 읽힐 수 있으면 끊는다.
 // 한 번에 읽히는 톤은 하나라서 감정이 다른 줄을 묶으면 줄마다 연기를 바꿀 수 없다.
 
 import { ScriptLine, SpeakerId, lineText } from '../data/platingScript';
@@ -26,7 +27,8 @@ export function groupConsecutiveLines(lines: ScriptLine[]): ScriptLineGroup[] {
     const last = groups[groups.length - 1];
     const prev = last?.lines[last.lines.length - 1];
     const sameTake =
-      !!prev && !!line.mood && prev.mood === line.mood && prev.speaker === line.speaker && sceneOf(prev) === sceneOf(line);
+      !!prev && !!line.mood && prev.mood === line.mood && prev.speaker === line.speaker && sceneOf(prev) === sceneOf(line) &&
+      !/(?:…|\.{3})$/.test(prev.text.trimEnd()) && !/^(?:…|\.{3})/.test(line.text.trimStart());
     if (sameTake) last.lines.push(line);
     else groups.push({ id: '', scene: sceneOf(line), speaker: line.speaker, lines: [line] });
   }

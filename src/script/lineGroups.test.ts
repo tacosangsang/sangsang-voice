@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { ScriptLine } from '../data/platingScript';
-import { lineText } from '../data/platingScript';
+import { lineText, PLATING_SCRIPT } from '../data/platingScript';
 import { batchRequest, groupConsecutiveLines } from './lineGroups';
 import type { ScriptLineGroup } from './lineGroups';
 
@@ -20,6 +20,35 @@ test('입력이 섞여 있어도 식별자 순서로 줄을 묶는다', () => {
 test('같은 씬과 화자와 감정이 이어지면 한 묶음이다', () => {
   const groups = groupConsecutiveLines([first, second]);
   assert.deepEqual(groups, [{ id: `${first.id}~${second.id}`, scene: 'S#01', speaker: 'anchor', lines: [first, second] }]);
+});
+
+for (const ellipsis of ['…', '...']) {
+  test(`앞 줄이 ${ellipsis}로 끝나면 묶음을 끊는다`, () => {
+    const lines = [{ ...first, text: `첫 대사${ellipsis}  ` }, second, third];
+    assert.deepEqual(groupConsecutiveLines(lines).map((group) => group.lines.map((line) => line.id)), [
+      [first.id], [second.id, third.id],
+    ]);
+  });
+
+  test(`다음 줄이 ${ellipsis}로 시작하면 묶음을 끊는다`, () => {
+    const lines = [first, { ...second, text: `  ${ellipsis}다음 대사.` }, third];
+    assert.deepEqual(groupConsecutiveLines(lines).map((group) => group.lines.map((line) => line.id)), [
+      [first.id], [second.id, third.id],
+    ]);
+  });
+}
+
+test('문장 안의 말줄임표는 묶음을 끊지 않는다', () => {
+  assert.deepEqual(groupConsecutiveLines([{ ...first, text: '첫… 대사.' }, second]).map((group) => group.lines.length), [2]);
+});
+
+test('사본 대본의 S#01 앵커는 C001, C002~C007, C008 세 묶음이다', () => {
+  const lines = PLATING_SCRIPT.filter((line) => line.id.startsWith('S#01-') && line.speaker === 'anchor');
+  assert.deepEqual(groupConsecutiveLines(lines).map((group) => group.lines.map((line) => line.id)), [
+    ['S#01-C001'],
+    ['S#01-C002', 'S#01-C003', 'S#01-C004', 'S#01-C005', 'S#01-C006-2A', 'S#01-C007'],
+    ['S#01-C008'],
+  ]);
 });
 
 for (const [label, mood] of [['없는 감정', undefined], ['빈 감정', '']] as const) {
