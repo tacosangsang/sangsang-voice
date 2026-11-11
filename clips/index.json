@@ -198,5 +198,25 @@
    "createdAt": 1794402756005
   },
   "path": "clips/S01/S01-C004-앵커-Kore-v1.wav"
+ },
+ {
+  "id": "cli-batch-1794402756008-4",
+  "createdAt": 1794402756004,
+  "mimeType": "audio/wav",
+  "name": "S01/S01-C005-앵커-Kore-v1",
+  "fields": {
+   "id": "cli-batch-1794402756008-4",
+   "presetName": "S#01-C005 Kore (묶음)",
+   "voiceName": "Kore",
+   "text": "농업 당국은 올해도 곡물 수확량이 0이라고 밝혔습니다. 정부는 사육 곤충 배급을 유지할 방침입니다.",
+   "stylePrompt": "Polished state TV newscaster. Polite formal speech, steady even pace, emotionally neutral, quietly propagandistic. These are separate lines read one after another. Leave a clear silence of about one second between lines.",
+   "duration": 3.3,
+   "scriptLineId": "S#01-C005",
+   "language": "ko",
+   "mimeType": "audio/wav",
+   "recordName": "S01/S01-C005-앵커-Kore-v1",
+   "createdAt": 1794402756004
+  },
+  "path": "clips/S01/S01-C005-앵커-Kore-v1.wav"
  }
 ]
