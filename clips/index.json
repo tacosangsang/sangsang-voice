@@ -338,5 +338,25 @@
    "recordName": "S05/S05-C003-토끼-Enceladus-v1"
   },
   "path": "clips/S05/S05-C003-토끼-Enceladus-v1.wav"
+ },
+ {
+  "id": "cli-batch-1794440740086-0",
+  "createdAt": 1794440740086,
+  "mimeType": "audio/wav",
+  "name": "S05/S05-C003-토끼-Enceladus-v2",
+  "fields": {
+   "id": "cli-batch-1794440740086-0",
+   "presetName": "S#05-C003 Enceladus (묶음)",
+   "voiceName": "Enceladus",
+   "text": "당신의 손이 필요한 곳이 있습니다.",
+   "stylePrompt": "Masked servant of the elite. Low, polite and very calm, almost no rise and fall in pitch, unreadable. These are separate lines read one after another. Leave a clear silence of about one second between lines.",
+   "duration": 2.99,
+   "scriptLineId": "S#05-C003",
+   "language": "ko",
+   "mimeType": "audio/wav",
+   "recordName": "S05/S05-C003-토끼-Enceladus-v2",
+   "createdAt": 1794440740086
+  },
+  "path": "clips/S05/S05-C003-토끼-Enceladus-v2.wav"
  }
 ]
