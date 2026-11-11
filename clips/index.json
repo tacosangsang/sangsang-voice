@@ -298,5 +298,25 @@
    "recordName": "S05/S05-C003-토끼-Algieba-v1"
   },
   "path": "clips/S05/S05-C003-토끼-Algieba-v1.wav"
+ },
+ {
+  "id": "audition:rabbit|Schedar|S#05-C003|Masked servant of the elite. Low, polite and very calm, almost no rise and fall in pitch, unreadable.|ko:1794440591976",
+  "createdAt": 1794440591976,
+  "mimeType": "audio/wav",
+  "name": "S05/S05-C003-토끼-Schedar-v1",
+  "fields": {
+   "id": "audition:rabbit|Schedar|S#05-C003|Masked servant of the elite. Low, polite and very calm, almost no rise and fall in pitch, unreadable.|ko:1794440591976",
+   "auditionKey": "rabbit|Schedar|S#05-C003|Masked servant of the elite. Low, polite and very calm, almost no rise and fall in pitch, unreadable.|ko",
+   "presetName": "목소리 비교 · 토끼 Schedar",
+   "voiceName": "Schedar",
+   "text": "당신의 손이 필요한 곳이 있습니다.",
+   "stylePrompt": "Masked servant of the elite. Low, polite and very calm, almost no rise and fall in pitch, unreadable.",
+   "scriptLineId": "S#05-C003",
+   "language": "ko",
+   "mimeType": "audio/wav",
+   "createdAt": 1794440591976,
+   "recordName": "S05/S05-C003-토끼-Schedar-v1"
+  },
+  "path": "clips/S05/S05-C003-토끼-Schedar-v1.wav"
  }
 ]
