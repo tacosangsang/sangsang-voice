@@ -69,9 +69,13 @@ const PLATING_SCENES: PlatingScene[] = [
   },
 ];
 
+/** 씬의 첫 대사. 2026-11-11 노션 개편 뒤 컷 id가 `RS01-C002 (S#07-C008)`처럼 옛 씬번호를 괄호에 담는다. */
+function firstLineOf(scene: PlatingScene) {
+  return PLATING_SCRIPT.find((line) => line.id.startsWith(`${scene.number}-`) || line.id.includes(`(${scene.number}-`));
+}
+
 function toSceneItem(scene: PlatingScene): SceneItem {
-  const firstLine = PLATING_SCRIPT.find((line) => line.id.startsWith(`${scene.number}-`));
-  if (!firstLine) throw new Error(`${scene.number}에 대사가 없습니다. 대사 있는 씬만 기본 씬에 둡니다.`);
+  const firstLine = firstLineOf(scene)!;
   const speakerName = SPEAKERS.find((s) => s.id === firstLine.speaker)?.name ?? firstLine.speaker;
   return {
     id: scene.number,
@@ -85,4 +89,5 @@ function toSceneItem(scene: PlatingScene): SceneItem {
   };
 }
 
-export const DEFAULT_SCENES: SceneItem[] = PLATING_SCENES.map(toSceneItem);
+// 대본에서 대사가 빠진 씬은 기본 씬에서도 뺀다(앱이 시작 때 멈추지 않게).
+export const DEFAULT_SCENES: SceneItem[] = PLATING_SCENES.filter((scene) => firstLineOf(scene)).map(toSceneItem);
