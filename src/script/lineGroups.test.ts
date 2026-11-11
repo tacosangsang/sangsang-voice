@@ -42,12 +42,11 @@ test('문장 안의 말줄임표는 묶음을 끊지 않는다', () => {
   assert.deepEqual(groupConsecutiveLines([{ ...first, text: '첫… 대사.' }, second]).map((group) => group.lines.length), [2]);
 });
 
-test('사본 대본의 S#01 앵커는 C001, C002~C007, C008 세 묶음이다', () => {
+test('사본 대본의 S#01 앵커는 C001, C002~C007 두 묶음이다', () => {
   const lines = PLATING_SCRIPT.filter((line) => line.id.startsWith('S#01-') && line.speaker === 'anchor');
   assert.deepEqual(groupConsecutiveLines(lines).map((group) => group.lines.map((line) => line.id)), [
     ['S#01-C001'],
     ['S#01-C002', 'S#01-C003', 'S#01-C004', 'S#01-C005', 'S#01-C006-2A', 'S#01-C007'],
-    ['S#01-C008'],
   ]);
 });
 

@@ -86,10 +86,23 @@ test('굵지 않은 공백이 섞여도 굵은 화자 이름을 읽는다', () =
   assert.deepEqual(parsed.lines.map((line) => line.speaker), ['anchor']);
 });
 
-test('아는 화자는 정해진 식별자로 읽는다', () => {
-  const parsed = parseRecordingScript([heading(), speaker(), table()]);
-  assert.equal(parsed.lines[0].speaker, SPEAKERS.find((item) => item.name === '앵커')?.id);
-  assert.deepEqual(parsed.speakers, [{ id: 'anchor', name: '앵커' }]);
+for (const known of SPEAKERS) {
+  test(`아는 화자는 정해진 식별자로 읽는다: ${known.name}`, () => {
+    const parsed = parseRecordingScript([heading(), speaker(known.name), table()]);
+    assert.equal(parsed.lines[0].speaker, known.id);
+    assert.deepEqual(parsed.speakers, [known]);
+    assert.deepEqual(parsed.warnings, []);
+  });
+}
+
+test('괄호 속 옛 컷이 같아도 전체 컷 이름을 식별자로 보존한다', () => {
+  const cuts = ['RS02-C003-A1 (S#08-C002)', 'RS02-C003-A2 (S#08-C002)', 'RS02-C003-A3 (S#08-C002)'];
+  const parsed = parseRecordingScript([heading(), speaker(), table(undefined,
+    cuts.map((cut) => [cut, '안녕.', '3.6s']),
+  )]);
+  assert.deepEqual(parsed.lines.map((line) => line.id), cuts);
+  assert.deepEqual(parsed.lines.map((line) => line.cut), cuts);
+  assert.ok(parsed.lines.every((line) => line.cutSeconds === 3.6));
   assert.deepEqual(parsed.warnings, []);
 });
 
@@ -113,11 +126,13 @@ test('소수 초 단위 길이를 읽는다', () => {
   assert.equal(parseRecordingScript([heading(), speaker(), table()]).lines[0].cutSeconds, 4.5);
 });
 
-test('길이가 빈 칸이면 경고하고 0초로 읽는다', () => {
-  const parsed = parseRecordingScript([heading(), speaker(), table(undefined, [['S#01-C001', '안녕.', '']])]);
-  assert.equal(parsed.lines[0].cutSeconds, 0);
-  assert.match(parsed.warnings.join(' '), /S#01-C001: 길이 칸을 읽지 못했습니다/);
-});
+for (const length of ['', '-']) {
+  test(`길이가 ${length === '-' ? '미정' : '빈 칸'}이면 경고하고 0초로 읽는다`, () => {
+    const parsed = parseRecordingScript([heading(), speaker(), table(undefined, [['S#01-C001', '안녕.', length]])]);
+    assert.equal(parsed.lines[0].cutSeconds, 0);
+    assert.match(parsed.warnings.join(' '), /S#01-C001: 길이 칸을 읽지 못했습니다/);
+  });
+}
 
 test('TTS 대사가 원문을 바꾸면 버리고 경고한다', () => {
   const parsed = parseRecordingScript([heading(), speaker(), table(

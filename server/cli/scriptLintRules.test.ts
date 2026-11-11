@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { PLATING_SCRIPT } from '../../src/data/platingScript';
 import type { ScriptLine } from '../../src/data/platingScript';
+import { BundledScriptSource } from '../../src/script/bundledSource';
 import type { ScriptSource } from '../../src/script/source';
 import { parseScriptLintArgs } from './scriptLintArgs';
 import { formatScriptLint, lintScript } from './scriptLintRules';
@@ -160,11 +161,21 @@ test('필터 결과가 없어도 오류 없이 0줄로 끝난다', async () => {
   assert.equal(report.exitCode, 0);
 });
 
-test('사본 대본 전체는 오류 없이 끝나고 29줄을 점검한다', async () => {
-  const source = fakeSource(PLATING_SCRIPT);
+test('사본 대본 전체는 일반 모드에서 종료 코드 0으로 21줄을 점검한다', async () => {
+  const source = new BundledScriptSource();
   const report = lintScript(await source.load(), options);
   assert.equal(report.exitCode, 0);
-  assert.equal(report.summary.lineCount, 29);
+  assert.equal(report.summary.lineCount, 21);
+});
+
+test('사본의 길이 미정 두 줄은 0초이며 script:lint가 문제로 표시하고 strict에서 실패한다', async () => {
+  const snapshot = await new BundledScriptSource().load();
+  const report = lintScript(snapshot, { ...options, strict: true });
+  const unknownLengthIds = ['RS03-C010 (S#11-C016)', 'RS03-C001 (S#11-C002)'];
+  assert.deepEqual(PLATING_SCRIPT.filter((line) => line.cutSeconds === 0).map((line) => line.id), unknownLengthIds);
+  assert.deepEqual(report.lines.filter((line) => line.issues.some((issue) => issue.code === 'invalid-cut-seconds'))
+    .map((line) => line.id), unknownLengthIds);
+  assert.equal(report.exitCode, 1);
 });
 
 test('JSON은 설정 값에 따옴표·줄바꿈이 있어도 값부터 숨겨 형식을 보존한다', async () => {

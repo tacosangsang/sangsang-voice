@@ -23,14 +23,14 @@ function run(args: string[], environment: NodeJS.ProcessEnv = {}, preload = '') 
   return result;
 }
 
-test('실제 CLI는 키 없이 사본 29줄을 JSON으로 점검한다', () => {
+test('실제 CLI는 키 없이 사본 21줄을 JSON으로 점검한다', () => {
   const result = run(['--json', '--all']);
   assert.equal(result.status, 0);
   assert.equal(result.stderr, '');
   const output = JSON.parse(result.stdout);
   assert.deepEqual(Object.keys(output), ['lines', 'warnings', 'summary']);
-  assert.equal(output.summary.lineCount, 29);
-  assert.equal(output.lines.length, 29);
+  assert.equal(output.summary.lineCount, 21);
+  assert.equal(output.lines.length, 21);
 });
 
 test('실제 CLI의 JSON에서도 설정 값을 숨긴다', () => {

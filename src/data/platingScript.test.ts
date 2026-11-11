@@ -4,6 +4,7 @@ import {
   PLATING_SCRIPT, SPEAKERS, checkFit, countSyllables, findScriptLine, lineText, ttsTextMatches,
 } from './platingScript';
 import type { ScriptLine } from './platingScript';
+import { SPEAKER_AUDITIONS } from './voiceCandidates';
 
 const line: ScriptLine = {
   id: 'S#01-C001', cut: 'S#01-C001', tc: '', cutSeconds: 4,
@@ -78,8 +79,22 @@ test('사본 대본의 모든 화자는 아는 화자 목록에 있다', () => {
   for (const item of PLATING_SCRIPT) assert.ok(SPEAKERS.some((speaker) => speaker.id === item.speaker), item.id);
 });
 
-test('사본 대본의 컷 길이는 양수다', () => {
-  for (const item of PLATING_SCRIPT) assert.ok(item.cutSeconds > 0, item.id);
+test('2026-11-11 노션 기준 사본은 21줄이다', () => {
+  assert.equal(PLATING_SCRIPT.length, 21);
+});
+
+test('사본 대본의 컷 길이는 0 이상이다', () => {
+  for (const item of PLATING_SCRIPT) assert.ok(item.cutSeconds >= 0, item.id);
+});
+
+test('대사가 없어진 문틈 너머 화자는 기록 호환을 위해 남긴다', () => {
+  assert.deepEqual(SPEAKERS.find((speaker) => speaker.id === 'backroom-voice'), {
+    id: 'backroom-voice', name: '상류층(뒷방, 문틈 너머)',
+  });
+});
+
+test('성별 미정인 백조는 목소리 후보를 두지 않는다', () => {
+  assert.ok(!SPEAKER_AUDITIONS.some((audition) => audition.speaker === 'purist-swan'));
 });
 
 test('사본 대본의 원문은 비어 있지 않다', () => {
