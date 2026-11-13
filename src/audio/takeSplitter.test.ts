@@ -18,14 +18,46 @@ function signal(parts: { seconds: number; sound: boolean }[]): Float32Array {
   return samples;
 }
 
-test('반 초 무음으로 나눈 두 소리는 양끝에 0.08초 여유를 남긴다', () => {
+test('반 초 쉼 가운데서 나누며 첫 조각은 0부터 마지막 조각은 신호 끝까지 남긴다', () => {
   const samples = signal([
     { seconds: 0.2, sound: false }, { seconds: 0.4, sound: true },
     { seconds: 0.5, sound: false }, { seconds: 0.4, sound: true }, { seconds: 0.2, sound: false },
   ]);
-  assert.deepEqual(findLineRanges(samples, sampleRate, 2), [
-    { start: 1920, end: 10880 }, { start: 16320, end: 25280 },
+  assert.deepEqual(findLineRanges(samples, sampleRate, 2), {
+    segments: [{ start: 0, end: 13600 }, { start: 13600, end: samples.length }],
+    voice: [{ start: 1920, end: 10880 }, { start: 16320, end: 25280 }],
+  });
+});
+
+test('분할 조각을 이어 붙이면 프레임보다 짧은 꼬리까지 원본 샘플과 같다', () => {
+  const body = signal([
+    { seconds: 0.3, sound: false }, { seconds: 0.4, sound: true },
+    { seconds: 0.5, sound: false }, { seconds: 0.4, sound: true }, { seconds: 0.7, sound: false },
+    { seconds: 0.4, sound: true }, { seconds: 0.2, sound: false },
   ]);
+  const samples = new Float32Array(body.length + 7);
+  samples.set(body);
+  samples.fill(0.001, body.length);
+  const { segments } = findLineRanges(samples, sampleRate, 3, [1, 1, 1]);
+  const joined = new Float32Array(samples.length);
+  let offset = 0;
+  for (const { start, end } of segments) {
+    assert.equal(start, offset);
+    joined.set(samples.slice(start, end), offset);
+    offset += end - start;
+  }
+  assert.equal(offset, samples.length);
+  assert.deepEqual(joined, samples);
+});
+
+test('저장 범위의 긴 앞뒤 무음은 말소리 비율 판정에 들어가지 않는다', () => {
+  const samples = signal([
+    { seconds: 10, sound: false }, { seconds: 0.4, sound: true },
+    { seconds: 0.5, sound: false }, { seconds: 0.4, sound: true }, { seconds: 0.2, sound: false },
+  ]);
+  const { segments, voice } = findLineRanges(samples, sampleRate, 2, [1, 1]);
+  assert.deepEqual(suspiciousRanges(voice, [1, 1]), []);
+  assert.deepEqual(suspiciousRanges(segments, [1, 1]), [1]);
 });
 
 test('0.05초 쉼은 두 줄을 나눌 경계가 되지 못한다', () => {
@@ -50,16 +82,16 @@ test('세 쉼 중 긴 두 쉼을 세 줄의 경계로 쓴다', () => {
     { seconds: 0.6, sound: false }, { seconds: 0.3, sound: true },
     { seconds: 0.4, sound: false }, { seconds: 0.3, sound: true }, { seconds: 0.2, sound: false },
   ]);
-  assert.deepEqual(findLineRanges(samples, sampleRate, 3), [
-    { start: 1920, end: 17280 }, { start: 24320, end: 31680 }, { start: 35520, end: 42880 },
+  assert.deepEqual(findLineRanges(samples, sampleRate, 3).segments, [
+    { start: 0, end: 20800 }, { start: 20800, end: 33600 }, { start: 33600, end: samples.length },
   ]);
 });
 
-test('한 줄이면 앞뒤 무음을 줄이고 여유를 남긴 범위 하나를 반환한다', () => {
+test('한 줄이면 앞뒤 무음을 포함한 원본 전체 범위를 반환한다', () => {
   const samples = signal([
     { seconds: 0.3, sound: false }, { seconds: 0.5, sound: true }, { seconds: 0.3, sound: false },
   ]);
-  assert.deepEqual(findLineRanges(samples, sampleRate, 1), [{ start: 3520, end: 14080 }]);
+  assert.deepEqual(findLineRanges(samples, sampleRate, 1).segments, [{ start: 0, end: samples.length }]);
 });
 
 const anchorWeights = [20, 19, 29, 26, 40, 25, 16];
@@ -83,7 +115,7 @@ function anchorTake(missingFirstGap: boolean): Float32Array {
 }
 
 test('가중치 없이는 첫 줄 사이 쉼 누락을 C005 안의 쉼으로 대신해 일곱 조각이 어긋난다', () => {
-  const ranges = findLineRanges(anchorTake(true), sampleRate, 7);
+  const { voice: ranges } = findLineRanges(anchorTake(true), sampleRate, 7);
   const shiftedWeights = [39, 29, 26, 20, 20, 25, 16];
   assert.equal(ranges.length, 7);
   ranges.forEach((range, index) => {
@@ -98,7 +130,7 @@ test('음절 비율을 주면 첫 줄 사이 쉼이 빠진 일곱 줄 신호의 
 });
 
 test('문장 안 쉼이 줄 사이 쉼보다 길어도 음절 비율로 일곱 줄 경계를 고른다', () => {
-  const ranges = findLineRanges(anchorTake(false), sampleRate, 7, anchorWeights);
+  const { voice: ranges } = findLineRanges(anchorTake(false), sampleRate, 7, anchorWeights);
   assert.equal(ranges.length, 7);
   ranges.forEach((range, index) => {
     const expected = anchorWeights[index] / 4.9 + 0.16 + (index === 4 ? 0.4 : 0);
@@ -112,8 +144,8 @@ test('비율 비용이 같으면 더 긴 쉼을 경계로 고른다', () => {
     { seconds: 0.2, sound: false }, { seconds: 0.6, sound: true },
     { seconds: 0.6, sound: false }, { seconds: 0.7, sound: true }, { seconds: 0.2, sound: false },
   ]);
-  assert.deepEqual(findLineRanges(samples, sampleRate, 2, [1, 1]), [
-    { start: 1920, end: 31680 }, { start: 38720, end: 52480 },
+  assert.deepEqual(findLineRanges(samples, sampleRate, 2, [1, 1]).segments, [
+    { start: 0, end: 35200 }, { start: 35200, end: samples.length },
   ]);
 });
 
@@ -123,8 +155,8 @@ for (const [label, durations, weights] of [
 ] as const) {
   test(`선택한 조각 비율이 기대의 ${label}이면 자르기를 거부한다`, () => {
     const samples = signal([
-      { seconds: 0.2, sound: false }, { seconds: durations[0], sound: true },
-      { seconds: 0.5, sound: false }, { seconds: durations[1], sound: true }, { seconds: 0.2, sound: false },
+      { seconds: 10, sound: false }, { seconds: durations[0], sound: true },
+      { seconds: 0.5, sound: false }, { seconds: durations[1], sound: true }, { seconds: 10, sound: false },
     ]);
     assert.throws(() => findLineRanges(samples, sampleRate, 2, [...weights]), {
       message: '줄 길이 비율이 맞는 자르기 위치를 찾지 못했습니다.',

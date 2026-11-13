@@ -61,8 +61,8 @@ export async function generateBatch(
     const { sampleRate, channels } = decodePcm16Wav(bytes);
     const samples = channels[0];
     const weights = texts.map((text) => countSyllables(text) || text.length);
-    const ranges = findLineRanges(samples, sampleRate, texts.length, weights);
-    const suspicious = suspiciousRanges(ranges, weights);
+    const { segments: ranges, voice } = findLineRanges(samples, sampleRate, texts.length, weights);
+    const suspicious = suspiciousRanges(voice, weights);
     return { kind: 'split', texts, stylePrompt: request.stylePrompt, segments: ranges.map(({ start, end }, index) => ({
       bytes: encodeFloatChannelsToWav([samples.slice(start, end)], sampleRate),
       audioSeconds: (end - start) / sampleRate, suspicious: suspicious.includes(index),

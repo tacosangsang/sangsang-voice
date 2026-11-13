@@ -11,7 +11,7 @@ export interface SplitSegment {
 
 export interface SplitResult {
   segments: SplitSegment[];
-  /** 잘린 길이가 대사 길이 비율과 크게 다른 줄 번호(0부터) */
+  /** 말소리 길이가 대사 길이 비율과 크게 다른 줄 번호(0부터) */
   suspicious: number[];
 }
 
@@ -23,8 +23,8 @@ export interface TakeSplitter {
 const FRAME_SEC = 0.01;
 /** 이보다 짧은 쉼은 줄 사이로 보지 않는다 */
 const MIN_GAP_SEC = 0.12;
-/** 잘라 낸 줄 앞뒤에 남기는 여유 */
-const PAD_SEC = 0.08;
+/** 기존 비율 판정에만 쓰는 말소리 앞뒤 여유. 저장 범위에는 적용하지 않는다. */
+const VOICE_PAD_SEC = 0.08;
 /** 가장 큰 소리보다 이만큼(dB) 작으면 무음 */
 const SILENCE_DB = -35;
 
@@ -73,8 +73,11 @@ function weightedCuts(gaps: SampleRange[], firstVoice: number, voiceEnd: number,
   return cuts.reverse();
 }
 
-/** 자를 위치 계산(브라우저 API 없음). 실패하면 이유를 담아 던진다. */
-export function findLineRanges(samples: Float32Array, sampleRate: number, count: number, weights?: number[]): SampleRange[] {
+/** 저장용 분할 범위와 비율 판정용 말소리 범위(브라우저 API 없음). 실패하면 이유를 담아 던진다. */
+export function findLineRanges(samples: Float32Array, sampleRate: number, count: number, weights?: number[]): {
+  readonly segments: SampleRange[];
+  readonly voice: SampleRange[];
+} {
   const frame = Math.max(1, Math.round(sampleRate * FRAME_SEC));
   const frames = Math.floor(samples.length / frame);
   const rms = new Float32Array(frames);
@@ -111,25 +114,28 @@ export function findLineRanges(samples: Float32Array, sampleRate: number, count:
     .slice(0, count - 1)
     .sort((a, b) => a.start - b.start);
 
-  const pad = Math.round(PAD_SEC / FRAME_SEC);
+  const pad = Math.round(VOICE_PAD_SEC / FRAME_SEC);
   const voiceStarts = [firstVoice, ...cuts.map((c) => c.end)];
   const voiceEnds = [...cuts.map((c) => c.start), lastVoice + 1];
-  const ranges = voiceStarts.map((s, i) => ({
-    start: Math.max(0, s - pad) * frame,
+  const voice = voiceStarts.map((start, i) => ({
+    start: Math.max(0, start - pad) * frame,
     end: Math.min(frames, voiceEnds[i] + pad) * frame,
   }));
   if (weights) {
-    const total = ranges.reduce((sum, range) => sum + range.end - range.start, 0);
+    const total = voice.reduce((sum, range) => sum + range.end - range.start, 0);
     const weightTotal = weights.reduce((sum, weight) => sum + weight, 0);
-    if (ranges.some((range, index) => {
+    if (voice.some((range, index) => {
       const ratio = (range.end - range.start) / total / (weights[index] / weightTotal);
       return ratio < 0.6 || ratio > 1.6;
     })) throw new Error('줄 길이 비율이 맞는 자르기 위치를 찾지 못했습니다.');
   }
-  return ranges;
+  // 같은 샘플 경계를 공유해 쉼과 프레임보다 짧은 마지막 꼬리까지 빠짐없이 남긴다.
+  const boundaries = [0, ...cuts.map((cut) => Math.round((cut.start + cut.end) * frame / 2)), samples.length];
+  const segments = boundaries.slice(1).map((end, index) => ({ start: boundaries[index], end }));
+  return { segments, voice };
 }
 
-/** 잘린 길이 비중이 예상 비중의 절반 미만이거나 두 배를 넘는 줄 */
+/** 말소리 길이 비중이 예상 비중의 절반 미만이거나 두 배를 넘는 줄 */
 export function suspiciousRanges(ranges: SampleRange[], weights: number[]): number[] {
   const total = ranges.reduce((n, r) => n + r.end - r.start, 0);
   const weightTotal = weights.reduce((n, w) => n + w, 0);
@@ -153,7 +159,7 @@ export class SilenceTakeSplitter implements TakeSplitter {
     const encoded = await (await fetch(audioUrl)).arrayBuffer();
     const audio = await new OfflineAudioContext(1, 1, 48000).decodeAudioData(encoded);
     const samples = audio.getChannelData(0);
-    const ranges = findLineRanges(samples, audio.sampleRate, weights.length, weights);
+    const { segments: ranges, voice } = findLineRanges(samples, audio.sampleRate, weights.length, weights);
     const segments = await Promise.all(
       ranges.map(async (r) => {
         const wav = encodeFloatChannelsToWav([samples.slice(r.start, r.end)], audio.sampleRate);
@@ -163,6 +169,6 @@ export class SilenceTakeSplitter implements TakeSplitter {
         };
       }),
     );
-    return { segments, suspicious: suspiciousRanges(ranges, weights) };
+    return { segments, suspicious: suspiciousRanges(voice, weights) };
   }
 }

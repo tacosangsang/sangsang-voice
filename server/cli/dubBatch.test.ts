@@ -59,7 +59,7 @@ function fakeAi(bytes: Uint8Array) {
 }
 
 for (const count of [2, 3]) {
-  test(`${count}줄 묶음은 한 번 호출하고 무음에서 잘라 순서대로 저장한다`, async () => {
+  test(`${count}줄 묶음은 한 번 호출하고 쉼 가운데서 나눠 앞뒤 무음까지 순서대로 저장한다`, async () => {
     const lines = script(count);
     const store = new MemoryFileStore();
     const { ai, calls } = fakeAi(tones(Array.from({ length: count }, () => 0.4)));
@@ -73,12 +73,13 @@ for (const count of [2, 3]) {
       assert.equal(row.recordName, `S01/S01-C00${index + 1}-앵커-Kore-v1`);
       assert.equal(row.status, 'generated');
       if (row.status !== 'generated') assert.fail('줄별 생성 결과가 필요합니다.');
-      assert.equal(row.audioSeconds, 0.56);
+      const expectedSamples = (index === 0 || index === count - 1) ? 13600 : 14400;
+      assert.equal(row.audioSeconds, expectedSamples / sampleRate);
       const bytes = store.files.get(`${row.recordName}.wav`);
       assert.ok(bytes);
       const decoded = decodePcm16Wav(bytes);
       assert.equal(decoded.sampleRate, sampleRate);
-      assert.equal(decoded.channels[0].length, 8960);
+      assert.equal(decoded.channels[0].length, expectedSamples);
       const peak = decoded.channels[0].reduce((max, value) => Math.max(max, Math.abs(value)), 0);
       assert.ok(Math.abs(peak - (0.2 + index * 0.1)) < 0.001);
     });
