@@ -418,5 +418,25 @@
    "createdAt": 1794441321191
   },
   "path": "clips/S05/S05-C006-토끼-Enceladus-v2.wav"
+ },
+ {
+  "id": "cli-1794542790868",
+  "createdAt": 1794542790868,
+  "mimeType": "audio/wav",
+  "name": "S05/S05-C003-토끼-Enceladus-v4",
+  "fields": {
+   "id": "cli-1794542790868",
+   "presetName": "S#05-C003 Enceladus",
+   "voiceName": "Enceladus",
+   "text": "잠시, 시간 좀 내주시겠습니까.",
+   "stylePrompt": "Masked servant of the elite. Low, polite and very calm, almost no rise and fall in pitch, unreadable.",
+   "duration": 4,
+   "scriptLineId": "S#05-C003",
+   "language": "ko",
+   "mimeType": "audio/wav",
+   "recordName": "S05/S05-C003-토끼-Enceladus-v4",
+   "createdAt": 1794542790868
+  },
+  "path": "clips/S05/S05-C003-토끼-Enceladus-v4.wav"
  }
 ]
