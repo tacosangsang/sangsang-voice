@@ -20,6 +20,7 @@ export type DubRow = {
   readonly uploadFailed?: boolean;
 } & (
   | { readonly status: 'generated'; readonly audioSeconds: number; readonly suspicious?: boolean }
+  | { readonly status: 'batch-original'; readonly audioSeconds: number }
   | { readonly status: 'unsplit'; readonly audioSeconds: number; readonly reason: string }
   | { readonly status: 'dry-run' }
   | { readonly status: 'skipped' | 'failed'; readonly reason: string }
@@ -133,22 +134,28 @@ export async function dubLines(
         const audio = await generateBatch(ai, group, options);
         const createdAt = Math.max(Date.now(), lastCreatedAt + 1);
         lastCreatedAt = createdAt;
+        const line = group.lines[0];
+        const recordName = nextBatchName(plans[0].recordName, names);
+        let originalRow: DubRow;
+        try {
+          const audioSeconds = wavDurationSeconds(audio.bytes);
+          await store.write(`${recordName}.wav`, audio.bytes);
+          names.push(recordName);
+          const uploadFailed = await uploadClip(recordings.repository, {
+            id: audio.kind === 'whole' ? `cli-batch-${createdAt}-0` : `cli-batch-${createdAt}`,
+            presetName: `묶음 ${group.id} ${options.voiceName} (${audio.kind === 'whole' ? '자르기 실패' : '묶음 원본'})`,
+            voiceName: options.voiceName, text: audio.texts.join('\n\n'), stylePrompt: audio.stylePrompt,
+            duration: audioSeconds, language: options.language, mimeType: 'audio/wav', recordName, createdAt,
+          }, audio.bytes, warnings);
+          originalRow = audio.kind === 'whole'
+            ? { line, recordName, status: 'unsplit', audioSeconds, uploadFailed, reason: `${group.id}: ${audio.reason}` }
+            : { line, recordName, status: 'batch-original', audioSeconds, uploadFailed };
+        } catch (error) {
+          originalRow = { line, recordName, status: 'failed',
+            reason: `묶음 원본 저장 실패: ${error instanceof Error ? error.message : '알 수 없는 저장 오류'}` };
+        }
         switch (audio.kind) {
-          case 'whole': {
-            const line = group.lines[0];
-            const recordName = nextBatchName(plans[0].recordName, names);
-            const audioSeconds = wavDurationSeconds(audio.bytes);
-            await store.write(`${recordName}.wav`, audio.bytes);
-            names.push(recordName);
-            const uploadFailed = await uploadClip(recordings.repository, {
-              id: `cli-batch-${createdAt}-0`, presetName: `묶음 ${group.id} ${options.voiceName} (자르기 실패)`,
-              voiceName: options.voiceName, text: audio.texts.join('\n\n'), stylePrompt: audio.stylePrompt,
-              duration: audioSeconds, language: options.language, mimeType: 'audio/wav', recordName, createdAt,
-            }, audio.bytes, warnings);
-            rows.push({ line, recordName, status: 'unsplit', audioSeconds, uploadFailed,
-              reason: `${group.id}: ${audio.reason}` });
-            break;
-          }
+          case 'whole': break;
           case 'split': {
             for (const [index, line] of group.lines.entries()) {
               const { recordName } = planLine(line, snapshot.speakers, batchOptions, names);
@@ -175,6 +182,7 @@ export async function dubLines(
             throw new TypeError(`알 수 없는 묶음 결과: ${unreachable}`);
           }
         }
+        rows.push(originalRow);
       } catch (error) {
         for (const line of group.lines) {
           const { recordName } = planLine(line, snapshot.speakers, batchOptions, names);
@@ -245,6 +253,7 @@ export function formatDubTable(rows: readonly DubRow[]): string {
         break;
       }
       case 'unsplit': seconds = row.audioSeconds.toFixed(1); verdict = `통째 저장(자르기 실패): ${row.reason}`; break;
+      case 'batch-original': seconds = row.audioSeconds.toFixed(1); verdict = '묶음 원본'; break;
       case 'dry-run': verdict = '생성 예정'; break;
       case 'skipped': verdict = `건너뜀: ${row.reason}`; break;
       case 'failed': verdict = `실패: ${row.reason}`; break;

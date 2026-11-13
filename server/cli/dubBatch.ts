@@ -16,13 +16,14 @@ export type BatchPlan = {
 };
 
 export type BatchAudioResult = {
+  readonly bytes: Uint8Array;
   readonly texts: readonly string[];
   readonly stylePrompt: string;
 } & (
   | { readonly kind: 'split'; readonly segments: readonly {
     readonly bytes: Uint8Array; readonly audioSeconds: number; readonly suspicious: boolean;
   }[] }
-  | { readonly kind: 'whole'; readonly bytes: Uint8Array; readonly reason: string }
+  | { readonly kind: 'whole'; readonly reason: string }
 );
 
 export function planDubGroups(lines: ScriptLine[], options: DubOptions): ScriptLineGroup[] {
@@ -35,7 +36,7 @@ export function planDubGroups(lines: ScriptLine[], options: DubOptions): ScriptL
     group.lines.some((line) => !lineText(line, options.language)?.trim()) ? group.lines.map(single) : [group]);
 }
 
-/** 자르기에 실패한 원본은 첫 줄 이름을 바탕으로 별도의 묶음 버전을 쓴다. */
+/** 묶음 원본은 첫 줄 이름을 바탕으로 별도의 묶음 버전을 쓴다. */
 export function nextBatchName(firstRecordName: string, names: readonly string[]): string {
   const prefix = `${firstRecordName.replace(/-v\d+$/, '')}-batch-v`;
   const last = names.reduce((max, name) => {
@@ -63,7 +64,7 @@ export async function generateBatch(
     const weights = texts.map((text) => countSyllables(text) || text.length);
     const { segments: ranges, voice } = findLineRanges(samples, sampleRate, texts.length, weights);
     const suspicious = suspiciousRanges(voice, weights);
-    return { kind: 'split', texts, stylePrompt: request.stylePrompt, segments: ranges.map(({ start, end }, index) => ({
+    return { kind: 'split', bytes, texts, stylePrompt: request.stylePrompt, segments: ranges.map(({ start, end }, index) => ({
       bytes: encodeFloatChannelsToWav([samples.slice(start, end)], sampleRate),
       audioSeconds: (end - start) / sampleRate, suspicious: suspicious.includes(index),
     })) };

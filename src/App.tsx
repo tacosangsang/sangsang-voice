@@ -451,7 +451,7 @@ export default function App() {
     }
   };
 
-  // 같은 씬·같은 화자 줄 묶음을 TTS 한 번으로 뽑고, 무음 구간으로 잘라 컷마다 저장한다.
+  // 묶음을 쉼 가운데서 나눠 앞뒤 무음을 남기고, 통째 원본도 함께 저장한다.
   const handleBatchGenerate = async (batch: {
     group: ScriptLineGroup;
     voiceName: string;
@@ -477,6 +477,17 @@ export default function App() {
       if (!res.ok) throw new Error(data.error || `묶음 생성 실패 (${res.status})`);
       const wholeUrl = `data:${data.mimeType || 'audio/wav'};base64,${data.audioBase64}`;
       const createdAt = Date.now();
+      const original: DubbingItem = {
+        id: `batch-${createdAt}`,
+        presetName: `묶음 ${group.id} ${voiceName} (묶음 원본)`,
+        voiceName,
+        text: texts.join(' / '),
+        stylePrompt,
+        language,
+        mimeType: data.mimeType || 'audio/wav',
+        audioUrl: wholeUrl,
+        createdAt,
+      };
 
       let clips: DubbingItem[];
       try {
@@ -498,25 +509,14 @@ export default function App() {
           // 목록은 최신순이라 첫 줄이 위에 오도록 뒤 줄일수록 조금 이르게 둔다.
           createdAt: createdAt - i,
         }));
+        clips.push(original);
         if (suspicious.length > 0) {
           setErrorMsg(`자른 길이가 대사와 맞지 않아 보입니다. 들어 보고 확인하세요: ${suspicious.map((i) => group.lines[i].cut).join(', ')}`);
         }
-      } catch (splitError: any) {
-        // 자르기에 실패해도 호출은 이미 썼으니 통째로 남긴다.
-        clips = [
-          {
-            id: `batch-${createdAt}`,
-            presetName: `묶음 ${group.id} ${voiceName} (자르기 실패)`,
-            voiceName,
-            text: texts.join(' / '),
-            stylePrompt,
-            language,
-            mimeType: data.mimeType || 'audio/wav',
-            audioUrl: wholeUrl,
-            createdAt,
-          },
-        ];
-        setErrorMsg(`묶음을 줄마다 자르지 못해 통째로 저장했습니다: ${splitError.message}`);
+      } catch (splitError) {
+        clips = [{ ...original, presetName: `묶음 ${group.id} ${voiceName} (자르기 실패)` }];
+        const reason = splitError instanceof Error ? splitError.message : '알 수 없는 자르기 오류';
+        setErrorMsg(`묶음을 줄마다 자르지 못해 통째로 저장했습니다: ${reason}`);
       }
       const added = [...clips].reverse().map(addClip);
       handleSelectHistoryClip(added[added.length - 1]);

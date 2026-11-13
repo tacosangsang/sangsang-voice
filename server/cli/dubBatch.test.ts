@@ -62,14 +62,15 @@ for (const count of [2, 3]) {
   test(`${count}줄 묶음은 한 번 호출하고 쉼 가운데서 나눠 앞뒤 무음까지 순서대로 저장한다`, async () => {
     const lines = script(count);
     const store = new MemoryFileStore();
-    const { ai, calls } = fakeAi(tones(Array.from({ length: count }, () => 0.4)));
+    const original = tones(Array.from({ length: count }, () => 0.4));
+    const { ai, calls } = fakeAi(original);
     const report = await dubLines(source(lines), store, ai, options);
     assert.equal(report.exitCode, 0);
     assert.equal(calls.length, 1);
-    assert.equal(store.files.size, count);
+    assert.equal(store.files.size, count + 1);
     const requestedText = JSON.stringify(lines.map((line) => line.text).join('\n\n')).slice(1, -1);
     assert.ok(JSON.stringify(calls[0].contents).includes(requestedText));
-    report.rows.forEach((row, index) => {
+    report.rows.slice(0, count).forEach((row, index) => {
       assert.equal(row.recordName, `S01/S01-C00${index + 1}-앵커-Kore-v1`);
       assert.equal(row.status, 'generated');
       if (row.status !== 'generated') assert.fail('줄별 생성 결과가 필요합니다.');
@@ -83,8 +84,33 @@ for (const count of [2, 3]) {
       const peak = decoded.channels[0].reduce((max, value) => Math.max(max, Math.abs(value)), 0);
       assert.ok(Math.abs(peak - (0.2 + index * 0.1)) < 0.001);
     });
+    assert.equal(report.rows.length, count + 1);
+    assert.equal(report.rows[count].status, 'batch-original');
+    assert.deepEqual(store.files.get('S01/S01-C001-앵커-Kore-batch-v1.wav'), original);
+    assert.match(formatDubTable(report.rows).split('\n').at(-1) ?? '', /묶음 원본$/);
   });
 }
+
+test('자르기 성공 원본도 이전 batch 다음 버전으로 저장하고 이전 원본을 보존한다', async () => {
+  const store = new MemoryFileStore();
+  const previous = tones([0.2]);
+  store.files.set('S01/S01-C001-앵커-Kore-batch-v3.wav', previous);
+  const original = tones([0.4, 0.4]);
+  const report = await dubLines(source(script(2)), store, fakeAi(original).ai, options);
+  assert.equal(report.exitCode, 0);
+  assert.deepEqual(store.files.get('S01/S01-C001-앵커-Kore-batch-v3.wav'), previous);
+  assert.deepEqual(store.files.get('S01/S01-C001-앵커-Kore-batch-v4.wav'), original);
+  assert.equal(report.rows[2].recordName, 'S01/S01-C001-앵커-Kore-batch-v4');
+});
+
+test('컷 길이는 앞뒤 무음과 쉼을 포함한 분할 파일 전체 길이로 판정한다', async () => {
+  const lines = script(2).map((line) => ({ ...line, cutSeconds: 0.5 }));
+  const report = await dubLines(source(lines), new MemoryFileStore(), fakeAi(tones([0.4, 0.4])).ai, options);
+  assert.equal(report.exitCode, 0);
+  assert.match(formatDubTable(report.rows).split('\n')[1], /초과/);
+  assert.match(formatDubTable(report.rows).split('\n')[2], /초과/);
+  assert.match(formatDubTable(report.rows).split('\n')[3], /묶음 원본$/);
+});
 
 test('한 줄 묶음은 기존 한 줄 요청과 WAV를 그대로 쓴다', async () => {
   const bytes = tones([0.4]);
@@ -134,7 +160,9 @@ for (const force of [false, true]) {
     const report = await dubLines(source(script(2)), store, ai, { ...options, force });
     assert.equal(calls.length, 1);
     assert.equal(report.exitCode, 0);
-    assert.deepEqual(report.rows.map((row) => row.recordName), ['S01/S01-C001-앵커-Kore-v4', 'S01/S01-C002-앵커-Kore-v1']);
+    assert.deepEqual(report.rows.map((row) => row.recordName), [
+      'S01/S01-C001-앵커-Kore-v4', 'S01/S01-C002-앵커-Kore-v1', 'S01/S01-C001-앵커-Kore-batch-v1',
+    ]);
     assert.equal(report.warnings.length, force ? 0 : 1);
     if (!force) assert.match(report.warnings[0], /이미 있는 줄도 다시 생성/);
     assert.deepEqual(store.files.get('S01/S01-C001-앵커-Kore-v3.wav'), old);
@@ -204,14 +232,28 @@ test('일부 영어 대사가 없으면 한 줄 경로로 나눠 있는 대사�
 test('묶음의 파일 쓰기 실패는 해당 줄에 남기고 다음 줄을 계속 저장한다', async () => {
   const written: string[] = [];
   const store: FileStore = { async list() { return []; }, async write(path) {
-    if (path.includes('C001')) throw new Error('저장 실패');
+    if (path === 'S01/S01-C001-앵커-Kore-v1.wav') throw new Error('저장 실패');
     written.push(path);
   } };
   const { ai } = fakeAi(tones([0.4, 0.4]));
   const report = await dubLines(source(script(2)), store, ai, options);
   assert.equal(report.exitCode, 2);
-  assert.deepEqual(report.rows.map((row) => row.status), ['failed', 'generated']);
-  assert.deepEqual(written, ['S01/S01-C002-앵커-Kore-v1.wav']);
+  assert.deepEqual(report.rows.map((row) => row.status), ['failed', 'generated', 'batch-original']);
+  assert.deepEqual(written, ['S01/S01-C001-앵커-Kore-batch-v1.wav', 'S01/S01-C002-앵커-Kore-v1.wav']);
+});
+
+test('묶음 원본 저장 실패도 분할 컷들을 보존하고 코드 2를 반환한다', async () => {
+  const store = new MemoryFileStore();
+  const write = store.write.bind(store);
+  store.write = async (path, bytes) => {
+    if (path.includes('-batch-')) throw new Error('원본 저장 실패');
+    await write(path, bytes);
+  };
+  const report = await dubLines(source(script(2)), store, fakeAi(tones([0.4, 0.4])).ai, options);
+  assert.equal(report.exitCode, 2);
+  assert.deepEqual(report.rows.map((row) => row.status), ['generated', 'generated', 'failed']);
+  assert.equal(store.files.size, 2);
+  assert.match(formatDubTable(report.rows), /묶음 원본 저장 실패/);
 });
 
 test('한국어 묶음 가중치는 태그와 공백 대신 음절 수를 쓴다', async () => {
@@ -221,7 +263,7 @@ test('한국어 묶음 가중치는 태그와 공백 대신 음절 수를 쓴다
   const { ai } = fakeAi(tones([0.4, 1.6]));
   const report = await dubLines(source(lines), new MemoryFileStore(), ai, options);
   assert.equal(report.exitCode, 0);
-  assert.deepEqual(report.rows.map((row) => row.status), ['generated', 'generated']);
+  assert.deepEqual(report.rows.map((row) => row.status), ['generated', 'generated', 'batch-original']);
   assert.doesNotMatch(formatDubTable(report.rows), /들어 보고 확인/);
 });
 
@@ -232,17 +274,23 @@ test('한글 음절이 없는 영어 묶음 가중치는 글자 수를 쓴다', 
   const { ai } = fakeAi(tones([0.4, 1.6]));
   const report = await dubLines(source(lines), new MemoryFileStore(), ai, { ...options, language: 'en' });
   assert.equal(report.exitCode, 0);
-  assert.deepEqual(report.rows.map((row) => row.status), ['generated', 'generated']);
+  assert.deepEqual(report.rows.map((row) => row.status), ['generated', 'generated', 'batch-original']);
 });
 
-test('두 채널 WAV도 첫 채널에서만 자르고 줄별 WAV는 모노로 저장한다', async () => {
+test('두 채널 WAV도 첫 채널에서 나눈 컷은 모노로 저장하고 원본은 두 채널 그대로 남긴다', async () => {
   const samples = decodePcm16Wav(tones([0.4, 0.4])).channels[0];
-  const { ai } = fakeAi(encodeFloatChannelsToWav([samples, new Float32Array(samples.length).fill(0.5)], sampleRate));
+  const original = encodeFloatChannelsToWav([samples, new Float32Array(samples.length).fill(0.5)], sampleRate);
+  const { ai } = fakeAi(original);
   const store = new MemoryFileStore();
   const report = await dubLines(source(script(2)), store, ai, options);
   assert.equal(report.exitCode, 0);
-  assert.equal(store.files.size, 2);
-  for (const bytes of store.files.values()) assert.equal(decodePcm16Wav(bytes).channels.length, 1);
+  assert.equal(store.files.size, 3);
+  for (const row of report.rows.slice(0, 2)) {
+    const bytes = store.files.get(`${row.recordName}.wav`);
+    assert.ok(bytes);
+    assert.equal(decodePcm16Wav(bytes).channels.length, 1);
+  }
+  assert.deepEqual(store.files.get('S01/S01-C001-앵커-Kore-batch-v1.wav'), original);
 });
 
 test('묶음 생성 실패는 모든 해당 줄에 남기고 다음 묶음은 계속 생성한다', async () => {

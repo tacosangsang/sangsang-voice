@@ -282,30 +282,46 @@ test('dry-run도 깃허브를 확인하고 버전을 읽되 생성·로컬 쓰�
   assert.equal(report.exitCode, 0);
 });
 
-test('분할 묶음은 앱의 presetName·id·정렬 시각과 공통 지시문으로 컷마다 업로드한다', async () => {
+test('분할 묶음은 앱의 presetName·id·정렬 시각으로 컷과 원본을 서로 다른 id로 업로드한다', async () => {
   const repository = new MemoryRecordingRepository();
   const prior = existing(firstName);
   repository.records.set(prior.id, prior);
+  const priorBatch = existing(firstName.replace('-v1', '-batch-v3'));
+  repository.records.set(priorBatch.id, priorBatch);
   const store = new MemoryFileStore();
   repository.beforeSave = (meta, audio) => assert.deepEqual(Buffer.from(store.files.get(`${meta.name}.wav`) ?? []), audio);
   const stylePrompt = '차분하게.';
-  const report = await dubLines(source, store, fakeAi(tones(2)).ai, {
+  const original = tones(2);
+  const report = await dubLines(source, store, fakeAi(original).ai, {
     ...options, batch: true, stylePrompt,
   }, repository);
-  const saved = [...repository.records.values()].slice(1);
+  const saved = [...repository.records.values()].slice(2);
+  const cuts = saved.filter((meta) => meta.fields.scriptLineId);
+  const whole = saved.find((meta) => !meta.fields.scriptLineId);
   const request = batchRequest(groupConsecutiveLines(lines)[0], stylePrompt, 'ko');
   assert.equal(report.exitCode, 0);
-  assert.equal(saved.length, 2);
-  assert.equal(saved[0].name, firstName.replace('-v1', '-v2'));
-  saved.forEach((meta, index) => {
-    assert.equal(meta.id, `cli-batch-${saved[0].createdAt}-${index}`);
-    assert.equal(meta.createdAt, saved[0].createdAt - index);
+  assert.equal(saved.length, 3);
+  assert.equal(cuts.length, 2);
+  assert.equal(cuts[0].name, firstName.replace('-v1', '-v2'));
+  cuts.forEach((meta, index) => {
+    assert.equal(meta.id, `cli-batch-${cuts[0].createdAt}-${index}`);
+    assert.equal(meta.createdAt, cuts[0].createdAt - index);
     assert.deepEqual(meta.fields, {
       id: meta.id, presetName: `${lines[index].cut} Kore (묶음)`, voiceName: 'Kore', text: request.texts[index],
       stylePrompt: request.stylePrompt, duration: wavDurationSeconds(store.files.get(`${meta.name}.wav`) ?? new Uint8Array()),
       scriptLineId: lines[index].id, language: 'ko', mimeType: 'audio/wav', recordName: meta.name, createdAt: meta.createdAt,
     });
   });
+  assert.ok(whole);
+  assert.equal(whole.id, `cli-batch-${cuts[0].createdAt}`);
+  assert.equal(whole.name, firstName.replace('-v1', '-batch-v4'));
+  assert.deepEqual(whole.fields, {
+    id: whole.id, presetName: '묶음 S#01-C001~S#01-C002 Kore (묶음 원본)', voiceName: 'Kore',
+    text: request.texts.join('\n\n'), stylePrompt: request.stylePrompt, duration: wavDurationSeconds(original),
+    language: 'ko', mimeType: 'audio/wav', recordName: whole.name, createdAt: whole.createdAt,
+  });
+  assert.deepEqual(repository.audio.get(whole.id), Buffer.from(original));
+  assert.match(formatDubTable(report.rows).split('\n').at(-1) ?? '', /묶음 원본$/);
 });
 
 test('묶음 dry-run도 깃허브에만 있는 전체 묶음을 호출 없이 건너뛴다', async () => {
@@ -365,10 +381,28 @@ test('분할 묶음의 업로드 실패도 로컬 컷들을 유지하고 다음 
   const store = new MemoryFileStore();
   const report = await dubLines(source, store, fakeAi(tones(2)).ai, { ...options, batch: true }, repository);
   assert.equal(report.exitCode, 2);
-  assert.equal(store.files.size, 2);
-  assert.equal(repository.records.size, 1);
-  assert.deepEqual(report.rows.map((row) => row.status), ['generated', 'generated']);
+  assert.equal(store.files.size, 3);
+  assert.equal(repository.records.size, 2);
+  assert.deepEqual(report.rows.map((row) => row.status), ['generated', 'generated', 'batch-original']);
   const table = formatDubTable(report.rows).split('\n');
   assert.match(table[1], /깃허브 저장 실패/);
   assert.doesNotMatch(table[2], /깃허브 저장 실패/);
+  assert.doesNotMatch(table[3], /깃허브 저장 실패/);
+});
+
+test('성공한 묶음의 원본 업로드 실패도 모든 로컬 파일과 컷 업로드를 보존한다', async () => {
+  const repository = new MemoryRecordingRepository();
+  repository.beforeSave = (meta) => {
+    repository.saveError = meta.fields.scriptLineId ? undefined : new Error('원본 업로드 거부');
+  };
+  const store = new MemoryFileStore();
+  const original = tones(2);
+  const report = await dubLines(source, store, fakeAi(original).ai, { ...options, batch: true }, repository);
+  assert.equal(report.exitCode, 2);
+  assert.equal(store.files.size, 3);
+  assert.equal(repository.records.size, 2);
+  assert.deepEqual(store.files.get(firstName.replace('-v1', '-batch-v1.wav')), original);
+  assert.deepEqual(report.rows.map((row) => row.status), ['generated', 'generated', 'batch-original']);
+  assert.equal(report.rows[2].uploadFailed, true);
+  assert.match(formatDubTable(report.rows).split('\n')[3], /묶음 원본.*깃허브 저장 실패/);
 });
